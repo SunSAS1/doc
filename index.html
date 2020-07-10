@@ -14,9 +14,15 @@
     window.$docsify = {
       name: '',
       repo: '',
-      loadSidebar: true
+      loadSidebar: true,
+      // 开启目录，最大层级为2
+      subMaxLevel: 2
     }
   </script>
   <script src="//cdn.jsdelivr.net/npm/docsify/lib/docsify.min.js"></script>
+  <!--Java代码高亮-->
+  <script src="//unpkg.com/prismjs/components/prism-java.js"></script>
+  <!-- 复制到剪贴板 -->
+  <script src="//unpkg.com/docsify-copy-code"></script>
 </body>
 </html>

@@ -12,7 +12,7 @@
   * [数据结构](sunsas/数据结构)
 
 * MySQL
-  * [MySQL基础](sunsas/MySQL)
+  * [3.1 MySQL基础](sunsas/MySQL)
 
 * Spring
 

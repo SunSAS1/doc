@@ -266,7 +266,7 @@ InnoDB存储引擎中页的大小为16KB，一般表的主键类型为INT（占�
 
 还有一个**B*树**：
 B*树：在B+树基础上，为非叶子结点也增加链表指针，将结点的最低利用率从1/2提高到2/3。
-![B*树](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/BxingTree6.JPG)
+![B星树](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/BxingTree6.JPG)
 ### 主键索引与辅助索引
 #### MyISAM
 MyISAM引擎的索引文件和数据文件是分离的。MyISAM引擎索引结构的叶子节点的数据域，存放的并不是实际的数据记录，而是数据记录的地址。**索引文件与数据文件分离，这样的索引称为"非聚簇索引"**。MyISAM的主索引与辅助索引区别并不大，只是主键索引不能有重复的关键字。
@@ -455,7 +455,40 @@ LIMIT <limit_number>
 **exists**：exists对外表用loop逐条查询，每次查询都会查看exists的条件语句，当exists里的条件语句能够返回记录行时（无论记录行是的多少，只要能返回），条件就为真，返回当前loop到的这条记录；反之，如果exists里的条件语句不能返回记录行，则当前loop到的这条记录被丢弃，exists的条件就像一个bool条件，当能返回结果集则为true，不能返回结果集则为false
 
 **in**：in查询相当于多个or条件的叠加。
+#### IN查询分析
+一下A代表外表，B代表子查询表。
+```
+SELECT * FROM A WHERE id IN (SELECT id FROM B);
+-- 等价于：
+1、SELECT id FROM B ----->先执行in中的查询
+2、SELECT * FROM A WHERE A.id = B.id
+```
+以上in()中的查询只执行一次，它查询出B中的所有的id并**缓存**起来，然后检查A表中查询出的id在缓存中是否存在，如果存在则将A的查询数据加入到结果集中，直到遍历完A表中所有的结果集为止。
+> 1、A表中有100条记录，B表中有1000条记录，那么最多可能遍历100*1000次，效率很差
+>
+> 2、A表中有1000条记录，B表中有100条记录，那么最多可遍历1000*100次，区别就是内循环次数减少，因为是外循环与内循环比较，如果相同就返回，效率大大提升。
 
+结论：**IN()查询适合B表数据比A表数据小的情况，IN()查询是从缓存中取数据。**
+
+#### EXISTS查询分析
+```
+SELECT * FROM A WHERE EXISTS(SELECT 1 FROM b WHERE B.id = A.id);
+-- 以上查询等价于：
+1、SELECT * FROM A;
+2、SELECT I FROM B WHERE B.id = A.id;
+```
+> 查看是否有记录，一般是作条件用的。select 1 from 中的1是一常量，查到的所有行的值都是它，但从效率上来说，1>anycol>*，因为不用查字典表。
+
+使用exists关键字进行查询的时候，首先，我们先查询的不是子查询的内容，而是查我们的主查询的表.
+
+会先执行`SELECT * FROM A`查询，执行A.length次，并不会将EXISTS()查询结果结果进行缓存，因为EXISTS()查询返回一个布尔值true或flase，它只在乎EXISTS()的查询中是否有记录，与具体的结果集无关。
+
+EXISTS()查询是将主查询的结果集放到子查询中做验证，根据验证结果是true或false来决定主查询数据结果是否得以保存。
+> 1.A表有100条记录,B表有10000条记录,那么EXISTS()会执行100次去判断A表中的id是否与B表中的id相等.因为它只执行A.length次，可见B表数据越多,越适合EXISTS()发挥效果.
+> 
+> 2.A表有10000条记录,B表有100条记录,那么EXISTS()还是执行10000次,此时不如使用in()遍历10000*100次,**因为IN()是在内存里遍历数据进行比较**,而EXISTS()需要查询数据库,我们都知道查询数据库所消耗的性能更高,而内存比较很快.
+
+#### 结论
 如果查询的两个表**大小相当**，那么用in和exists差别不大。
 
 如果两个表中一个较小，一个是大表，则**子查询表大的用exists，子查询表小的用in**。
@@ -498,6 +531,65 @@ select * from B where exists(select cc from A where cc=B.cc)
 > 2、对于not exists查询，外表存在空值，存在空值的那条记录最终会输出；对于not in查询，外表存在空值，存在空值的那条记录最终将被过滤，其他数据不受影响。
 
 
+### in,exists问题拓展
+#### 1.limit问题
+```
+-- users表有1000条记录，id自增，id都大于0
+-- 下面三条分别输出多少条记录？
+select * from users where exists (select * from users limit 0); 
+select * from users where exists (select * from users where users.id = 1); 
+select * from users where exists (select * from users where id < 0);
+```
+分别是（选中查看）
+<font color=white >10000</font>条，
+<font color=white >10000</font>条，
+<font color=white >0</font>条。
+> exists查询的本质，只要碰到有记录，则返回true；所以limit根本就不会去管，或者说执行不到。
+
+#### 2.exists可以完全代替in吗？
+不能。
+
+```
+--没有关联字段的情况：枚举常量
+select * from areas where id in (4, 5, 6);
+--没有关联字段的情况：这样exists对子查询，要么全true，要么全false(文章可能也是转载的，我看不懂他在说啥)
+select * from areas where id in (select city_id from deals where deals.name = 'xxx'); 
+```
+#### exists的sql优化?
+1. **用exists替代in**  
+使用exists(或not exists)通常将提高查询的效率。 
+举例：
+```
+-- 低效 
+select ... from table1 t1 where t1.id > 10 and pno in (select no from table2 where name like 'www%');
+-- 高效 
+select ... from table1 t1 where t1.id > 10 and exists (select 1 from table2 t2 where t1.pno = t2.no and name like 'www%'); 
+```
+2. **用not exists替代not in**  
+无论在哪种情况下，**not in都是最低效的** (因为它对子查询中的表执行了一个全表遍历)。 
+为了避免使用not in，我们可以把它改写成外连接(Outer Joins)或not exists。
+3. **用exists替换distinct**  
+当提交一个包含一对多表信息的查询时,避免在select子句中使用distinct. 一般可以考虑用exists替换。  
+exists使查询更为迅速,因为RDBMS核心模块将在子查询的条件一旦满足后,立刻返回结果. 
+``` 
+-- 低效 
+select distinct d.dept_no, d.dept_name from t_dept d, t_emp e where d.dept_no = e.dept_no; 
+-- 高效 
+select d.dept_no, d.dept_name from t_dept d where exists (select 1 from t_emp where d.dept_no = e.dept_no); 
+```
+4.** 用表连接替换exists**  
+通常来说，采用表连接的方式比exists更有效率。 
+
+```
+-- 低效 
+select ename from emp e where exists (select 1 from dept where dept_no = e.dept_no and dept_cat = 'W'); 
+SELECT ENAME 
+-- 高效 
+select ename from dept d, emp e where e.dept_no = d.dept_no and dept_cat = 'W';
+```
+
+
+
 ### mysql 的内连接、左连接、右连接
 ![Sql Joins](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/SQLJoins.png)
 - **内连接**:组合两个表中的记录，返回关联字段相符的记录，也就是返回两个表的交集（阴影）部分。
@@ -509,7 +601,9 @@ select * from B where exists(select cc from A where cc=B.cc)
 
 > 参考
 > 
-> [Mysql—— 内连接、左连接、右连接以及全连接查询](https://blog.csdn.net/zjt980452483/article/details/82945663)
+> [Mysql—— 内连接、左连接、右连接以及全连接查询](https://blog.csdn.net/zjt980452483/article/details/82945663)  
+> [MYSQL中IN与EXISTS的区别](https://www.cnblogs.com/Renyi-Fan/p/10997673.html)  
+> [Sql 语句中 IN 和 EXISTS 的区别及应用](https://blog.csdn.net/wqc19920906/article/details/79800374?utm_medium=distribute.pc_relevant_t0.none-task-blog-BlogCommendFromMachineLearnPai2-1.channel_param&depth_1-utm_source=distribute.pc_relevant_t0.none-task-blog-BlogCommendFromMachineLearnPai2-1.channel_param)
 
 
 ---
@@ -778,6 +872,7 @@ SELECT ... FOR UPDATE;
 在查询语句后面增加FOR UPDATE，Mysql会对查询结果中的每行都加排他锁，当没有其他线程对查询结果集中的任何一行使用排他锁时，可以成功申请排他锁，否则会被阻塞。
 
 > 对于UPDATE、DELETE、INSERT语句，InnoDB会自动给涉及数据集加**排他锁**（X)
+> **注意InnoDB不会为普通select加读锁！**
 >
 > MyISAM在执行查询语句SELECT前，会自动给涉及的所有表加**读锁**，在执行更新操作（UPDATE、DELETE、INSERT等）前，会自动给涉及的表加**写锁**，这个过程并不需要用户干预
 
@@ -802,12 +897,15 @@ MyISAM 表的读操作与写操作之间，以及写操作之间是串行的。�
 
 为了允许行锁和表锁共存，实现多粒度锁机制，**InnoDB**还有两种内部使用的意向锁（Intention Locks），这两种意向锁都是**表锁**：
 
-- 意向共享锁（IS）：事务打算给数据行加行共享锁，事务在给一个数据行加共享锁前必须先取得该表的IS锁。
+- 意向共享锁（IS）：���务打算给数据行加行共享锁，事务在给一个数据行加共享锁前必须先取得该表的IS锁。
 - 意向排他锁（IX）：事务打算给数据行加行排他锁，事务在给一个数据行加排他锁前必须先取得该表的IX锁。
 
 > 意向锁是数据库隐式帮我们做了，不需要程序员操心！
+> 其实意向锁就只是一个标识，如果给某一数据行加了排他锁，那么它之前也加了IX锁，别的事务这时想锁表，就只用看看IX锁有没有，如果有，就等待，而不用去遍历每一行数据查看是否有排他锁。
 
 我们是**很少手动加表锁**的。表锁对我们程序员来说几乎是透明的，即使InnoDB不走索引，**加的表锁也是自动的**！
+> **注意 InnoDb中RC级别不走索引也是不会锁表的，只会该加锁的行加行锁！**  
+
 我们应该更加关注行锁的内容，因为InnoDB一大特性就是支持行锁。
 
 #### 行锁

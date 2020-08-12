@@ -835,7 +835,7 @@ finally中⼿动remove，不然会有内存泄漏的问题
 
 
 
-## Java中的锁
+## 1.2.3 Java中的锁
 > 基于《Java并发编程的艺术》
 
 ### 1. 锁的状态
@@ -1176,7 +1176,7 @@ CountDownLatch允许一个或多个线程等待其他线程完成操作。
 
 其实很容易想到之前的`join`可以实现此需求
 
-```
+```java
 /**
  * <Description> join用于让当前执行线程等待join线程执行结束。其实现原理是不停检查join线程是否存活，
  * 如果join线程存活则让当前线程永远等待。其中，wait（0）表示永远等待下去，代码片段如下。
@@ -1209,7 +1209,7 @@ public class JoinCountDownLatchTest {
 ```
 使用**CountDownLatch**：
 
-```
+```java
 public class CountDownLatchTest {
     static CountDownLatch c = new CountDownLatch(2);
 
@@ -1236,7 +1236,7 @@ CountDownLatch的构造函数接收一个int类型的参数作为计数器，如
 > 注意:计数器必须大于等于0，只是等于0时候，计数器就是零，调用await方法时不会阻塞当前线程。CountDownLatch不可能重新初始化或者修改CountDownLatch对象的内部计数器的值。**一个线程调用countDown方法happen-before，另外一个线程调用await方法**。
 
 模拟并发
-```
+```java
 public class Parallellimit {
     public static void main(String[] args) {
         ExecutorService pool = Executors.newCachedThreadPool();
@@ -1536,7 +1536,7 @@ public class Shop {
 }
 ```
 
-```
+```java
 调用异步接口：
 public class Client {
     public static void main(String[] args){
@@ -1568,7 +1568,7 @@ public class Client {
 ```
 如果上述的Shop类提供的方法都是同步阻塞式的，而且你也没法更改，因为他们是服务提供者。
 
-```
+```java
  /**
  * 也就是这个方法不同
  * (阻塞式)通过名称查询价格
@@ -1651,7 +1651,9 @@ CompletableFuture在任务更多时才有优势，但它可以让你对 Execotor
 > [countDownLatch](https://www.jianshu.com/p/e233bb37d2e6)
 
 
+
 ---
+
 
 
 ## 1.2.5 线程池
@@ -1780,7 +1782,7 @@ corePoolSize，核心线程数，也称基本线程。当线程池创立时，�
 
 **自定义拒绝策略**：只要实现RejectedExecutionHandler接口，并且实现rejectedExecution方法就可以了。
 
-```
+```java
 public class MyRejectPolicy implements RejectedExecutionHandler{
     public void rejectedExecution(Runnable r, ThreadPoolExecutor executor) {
         // doSomething
@@ -1889,7 +1891,7 @@ threadsPool.execute(new Runnable() {
 #### 5.2 submit()
 submit()用于提交需要返回值的任务，线程池会返回一个future类型对象,通过此对象可以判断任务是否执行成功，并可通过get()获取返回值,**get()会阻塞当前线程直到任务完成**,而使用get（long timeout，TimeUnit unit）方法则会阻塞当前线程一段时间后立即返回,这时候可能任务没有执行完.
 
-```
+```java
 Future<Object> future = executor.submit(harReturnValuetask);
     try {
         Object s = future.get();
@@ -1980,5 +1982,4 @@ private static final int TERMINATED =  3 << COUNT_BITS;
 > [【转载】线程池与五种线程池策略使用与解析](https://www.jianshu.com/p/c8d68f57d06d)
 
 
-> 关于多线程就介绍这么多了，除了一些比较底层的没讲，例如Java的阻塞队列，AQS具体实现，Fork/join,future等等，这些比较难理解，而且面试中也很冷门，就略过了。这里推荐一位大佬的专栏[透彻理解Java并发编程](https://segmentfault.com/blog/ressmix_multithread),非常底层，如果想深入研究，可以去看看。。
-
+> 关于多线程就介绍这么多了，除了一些比较底层的没讲，例如Java的阻塞队列，AQS具体实现，Fork/join,future等等，这些比较难理解，而且面试中也很冷门，就略过了。这里推荐一位大佬的专栏[透彻理解Java并发编程](https://segmentfault.com/blog/ressmix_multithread),非常底层，如果想深入研究，可以去看看。

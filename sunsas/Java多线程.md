@@ -65,7 +65,7 @@ Java 为多线程提供了良好、考究并且一致的编程模型，是开发
 
 > Thread是实现自Runable接口
 
-```
+```java
 // 变体写法
 public static void main(String[] args) {
     // 匿名内部类
@@ -164,7 +164,7 @@ Java没有提供一种安全、直接的方法来停止某个线程（stop()太�
 
 下面是一个“不听话的子女”的例子：
 
-```
+```java
 public class Test {
     public static void main(String[] args) {
         Thread thread = new Thread() {
@@ -192,7 +192,7 @@ public class Test {
 
 1. **使用 interrupt() + InterruptedException来中断线程**  
 线程处于阻塞状态，如Thread.sleep、wait、IO阻塞等情况时，调用interrupt方法后，sleep等方法将会抛出一个InterruptedException：
-```
+```java
 public static void main(String[] args) {
     Thread thread = new Thread() {
         public void run() {
@@ -218,7 +218,7 @@ public static void main(String[] args) {
 2. **使用 interrupt() + isInterrupted()来中断线程**  
 `this.interrupted()`:测试当前线程是否已经中断（静态方法）。如果连续调用该方法，则第二次调用将返回false。在api文档中说明interrupted()方法具有清除状态的功能。执行后具有将状态标识清除为false的功能。  
 `this.isInterrupted()`:测试线程是否已经中断，但是不能清除状态标识。
-```
+```java
 // 与上面不同就是判断条件变了
 while (!isInterrupted()) {
     System.out.println(isInterrupted());//调用 interrupt 之后为true
@@ -228,7 +228,7 @@ while (!isInterrupted()) {
 ##### 8.2.3 安全的终止线程
 根据上面的思想，其实我们可以自定义一个标识位，来判断是否终止线程。
 
-```
+```java
 public class test1 {
 
     public static volatile boolean exit =false;  //退出标志
@@ -263,7 +263,7 @@ public class test1 {
 #### 9.1 原子性
 原子性是指一个操作是不可中断的，要么全部执行成功要么全部执行失败，有着“同生共死”的感觉。及时在多个线程一起执行的时候，一个操作一旦开始，就不会被其他线程所干扰。
 
-```
+```java
 int a = 10; //原子操作
 a++; // 其余都不是
 int b=a;
@@ -358,7 +358,7 @@ Java线程之间的通信由**Java内存模型**（本文简称为JMM）控制�
 
 简单的例子：
 
-```
+```java
 int a = 1;
 int b = 3;
 int c = a + b
@@ -367,7 +367,7 @@ int c = a + b
 
 但是**多线程下重排序会改变程序的执行结果**：
 
-```
+```java
 class ReorderExample {
 	int a = 0;
 	boolean flag = false;
@@ -411,7 +411,7 @@ as-if-serial语义的意思是：**不管怎么重排序，（单线程）程序
 
 为了具体说明，请看下面计算圆面积的代码示例。
 
-```
+```java
 double pi = 3.14;            // A
 double r = 1.0;                // B
 double area = pi * r * r;    // C
@@ -422,7 +422,7 @@ double area = pi * r * r;    // C
 
 为保证as-if-serial语义，**Java异常处理机制也会为重排序做一些特殊处理**。例如在下面的代码中，y = 0 / 0可能会被重排序在x = 2之前执行，为了保证最终不致于输出x = 1的错误结果，JIT在重排序时会在catch语句中插入错误代偿代码，将x赋值为2，将程序恢复到发生异常时应有的状态。这种做法的确将异常捕捉的逻辑变得复杂了，但是JIT的优化的原则是，尽力优化正常运行下的代码逻辑，哪怕以catch块逻辑变得复杂为代价，毕竟，进入catch块内是一种“异常”情况的表现。
 
-```
+```java
 public class Reordering {
     public static void main(String[] args) {
         int x, y;
@@ -503,7 +503,7 @@ public class Reordering {
 
 #### 6.3 volatile在单例模式下的应用
 
-```
+```java
 public class SingletonTest {
     private volatile static SingletonTest instance = null;
     private SingletonTest() { }
@@ -521,7 +521,7 @@ public class SingletonTest {
 ```
 instance = new SingletonTest();可分解为：
 
-```
+```java
 memory =allocate(); //1 分配对象的内存空间
 ctorInstance(memory); //2 初始化对象
 instance =memory; //3 设置instance指向刚分配的内存地址
@@ -546,7 +546,7 @@ synchronized 实现同步的基础：Java中的每一个对象都可以作为锁
 - 对于同步方法，是依靠方法修饰符上的`ACC_SYNCHRONIZED`来完成的
 - 对于同步块的实现使用了`monitorenter`和`monitorexit`指令
 
-```
+```java
 public class Synchronized {
 	public static void main(String[] args) {
 		// 对Synchronized Class对象进行加锁
@@ -559,7 +559,7 @@ public class Synchronized {
 }
 ```
 
-```
+```java
 public static void main(java.lang.String[]);
 // 方法修饰符，表示：public staticflags: ACC_PUBLIC, ACC_STATIC
 Code:
@@ -664,7 +664,7 @@ ThreadLocal提供了线程的局部变量，每个线程都可以通过set()和g
 
 #### 10.2 ThreadLocal简单使用
 
-```
+```java
  public class ThreadLocalTest {
  4 
  5     static ThreadLocal<String> localVar = new ThreadLocal<>();
@@ -712,7 +712,7 @@ ThreadLocal提供了线程的局部变量，每个线程都可以通过set()和g
 ThreadLocalMap是ThreadLocal的一个内部类。用Entry类来进行存储
 
 我们的值都是存储到这个Map上的，key是当前ThreadLocal对象（也就是”this“）
-```
+```java
 static class ThreadLocalMap {
 
         /**
@@ -737,20 +737,20 @@ static class ThreadLocalMap {
 ```
 如果该Map不存在，则初始化一个：
 
-```
+```java
  void createMap(Thread t, T firstValue) {
     t.threadLocals = new ThreadLocalMap(this, firstValue);
 }
 ```
 
 还有一点需要注意的是：**ThreadLocalMap是在ThreadLocal中使用内部类来编写的，但对象的引用是在Thread中**
-```
+```java
 // Thread维护了ThreadLocalMap变量
 ThreadLocal.ThreadLocalMap threadLocals = null
 ```
 现在再来看set()/get()就很清晰了：
 
-```
+```java
 public void set(T value) {
     //取得当前线程，并获取它的threadLocals
     Thread t = Thread.currentThread();
@@ -801,7 +801,7 @@ Spring采用Threadlocal的方式，来**保证单个线程中的数据库操作�
 项目中存在一个线程经常遇到横跨若干方法调用，需要传递的对象，也就是上下文（Context），它是一种状态，经常就是是用户身份、任务信息等，就会存在过渡传参的问题。  
 也就是方法不需要再设置很多参数传递，而是方法内部直接get()
 
-```
+```java
 public void consult(IdCard idCard,StudentCard studentCard,HourseCard hourseCard){
     ...
 }
@@ -835,7 +835,7 @@ finally中⼿动remove，不然会有内存泄漏的问题
 
 
 
-## 1.2.3 Java中的锁
+## Java中的锁
 > 基于《Java并发编程的艺术》
 
 ### 1. 锁的状态
@@ -980,39 +980,39 @@ ReentrantLock在调用lock()方法时，已经获取到锁的线程，能够再�
 ##### 5.2.2 写锁获取与释放
 写锁是一个支持重进人的排它锁。如果当前线程已经获取了写锁，则增加写状态。如果当前线程在获取写锁时，读锁已经被获取（读状态不为0）或者该线程不是已经获取写锁的线程，则当前线程进人等待状态。
 
-```
-        protected final boolean tryAcquire(int acquires) {
-            /*
-             * Walkthrough:
-             * 1. If read count nonzero or write count nonzero
-             *    and owner is a different thread, fail.
-             * 2. If count would saturate, fail. (This can only
-             *    happen if count is already nonzero.)
-             * 3. Otherwise, this thread is eligible for lock if
-             *    it is either a reentrant acquire or
-             *    queue policy allows it. If so, update state
-             *    and set owner.
-             */
-            Thread current = Thread.currentThread();
-            int c = getState();
-            int w = exclusiveCount(c);
-            if (c != 0) {
-                // (Note: if c != 0 and w == 0 then shared count != 0)
+```java
+protected final boolean tryAcquire(int acquires) {
+    /*
+     * Walkthrough:
+     * 1. If read count nonzero or write count nonzero
+     *    and owner is a different thread, fail.
+     * 2. If count would saturate, fail. (This can only
+     *    happen if count is already nonzero.)
+     * 3. Otherwise, this thread is eligible for lock if
+     *    it is either a reentrant acquire or
+     *    queue policy allows it. If so, update state
+     *    and set owner.
+     */
+    Thread current = Thread.currentThread();
+    int c = getState();
+    int w = exclusiveCount(c);
+    if (c != 0) {
+        // (Note: if c != 0 and w == 0 then shared count != 0)
 //存在读锁或者当前获取的线程不是已经获取写锁的过程
-                if (w == 0 || current != getExclusiveOwnerThread())
-                    return false;
-                if (w + exclusiveCount(acquires) > MAX_COUNT)
-                    throw new Error("Maximum lock count exceeded");
-                // Reentrant acquire
-                setState(c + acquires);
-                return true;
-            }
-            if (writerShouldBlock() ||
-                !compareAndSetState(c, c + acquires))
-                return false;
-            setExclusiveOwnerThread(current);
-            return true;
-        }
+        if (w == 0 || current != getExclusiveOwnerThread())
+            return false;
+        if (w + exclusiveCount(acquires) > MAX_COUNT)
+            throw new Error("Maximum lock count exceeded");
+        // Reentrant acquire
+        setState(c + acquires);
+        return true;
+    }
+    if (writerShouldBlock() ||
+        !compareAndSetState(c, c + acquires))
+        return false;
+    setExclusiveOwnerThread(current);
+    return true;
+}
 ```
 该方法除了重入条件(当前线程为获取了写锁的线程)之外，增加了一个读锁是否存在的判断。**如果存在读锁，则写锁不能被获取**，原因在于：**读写锁要确保写锁的操作对读锁可见**，如果允许读锁在已被获取的情况下对写锁的获取，那么正在运行的其他读线程就无法感知到当前写线程的操作。因此，只有等待其他读线程都释放了读锁，写锁才能被当前线程获取，而写锁一旦被获取，则其他读写线程的后续访问均被阻塞。
 
@@ -1032,7 +1032,7 @@ ReentrantLock在调用lock()方法时，已经获取到锁的线程，能够再�
 #### 6.1 简介
 之前说过在synchronized中，可以使用`wait/notify`实现等待通知机制，也可以使用Condition的`await/singal`。不过这两者使用还是有些不同的的。Condition可以唤醒指定的线程。Condition对象依赖于Lock对象（调用Lock对象的newCondition()方法)。Condition的使用方式非常的简单。但是需要注意在调用方法前获取锁。
 
-```
+```java
 private Lock lock = new ReentrantLock();
 
 private Condition condition = lock.newCondition();
@@ -1057,7 +1057,7 @@ public void conditionSignal() {
 ```
 Condition实现生产消费模式：
 
-```
+```java
   1 
   2 import java.util.LinkedList;
   3 import java.util.concurrent.locks.Condition;
@@ -1158,6 +1158,7 @@ StampedLock类,在JDK1.8时引入,是对读写锁ReentrantReadWriteLock的增强
 > [重入锁 ReentrantLock](https://www.cnblogs.com/ljl150/p/12568820.html)
 > [深入理解读写锁ReentrantReadWriteLock](https://www.jianshu.com/p/4a624281235e)  
 > [Java并发之Condition](https://www.cnblogs.com/gemine/p/9039012.html)
+
 
 
 ---

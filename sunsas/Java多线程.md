@@ -441,7 +441,7 @@ public class Reordering {
 
 1. **volatile**禁止重排序，通过插入内存屏障，这个后面再说。
 2. **synchronized**：也是使用了内存屏障
-3.** final**  
+3. **final**  
 对于final域，编译器和处理器要遵守两个重排序规则。
     - 在构造函数内对一个final域的写入，与随后把这个被构造对象的引用赋值给一个引用变量，这两个操作之间不能重排序。（防止拿到对象时，final域还未赋值）
     - 初次读一个包含final域的对象的引用，与随后初次读这个final域，这两个操作之间不能重排序。
@@ -456,10 +456,10 @@ public class Reordering {
 
 屏障类型 | 指令示例 | 说明    
 --- | --- | --- |
-| LoadLoad Barriers   |  Load1; LoadLoad; Load2       |确保Load1数据的装载，之前于Load2及所有后续装载指令的装载。|
-|  StoreStore Barriers |  Store1; StoreStore; Store2   |确保Store1数据对其他处理器可见（刷新到内存），之前于Store2及所有后续存储指令的存储。|
-| LoadStore Barriers  |  Load1; LoadStore; Store2     |确保Load1数据装载，之前于Store2及所有后续的存储指令刷新到内存。|
-| StoreLoad Barriers  |  Store1; StoreLoad; Load2     |确保Store1数据对其他处理器变得可见（指刷新到内存），之前于Load2及所有后续装载指令的装载。StoreLoad Barriers会使该屏障之前的所有内存访问指令（存储和装载指令）完成之后，才执行该屏障之后的内存访问指令。|
+LoadLoad Barriers   |  Load1; LoadLoad; Load2       |确保Load1数据的装载，之前于Load2及所有后续装载指令的装载。
+StoreStore Barriers |  Store1; StoreStore; Store2   |确保Store1数据对其他处理器可见（刷新到内存），之前于Store2及所有后续存储指令的存储。
+LoadStore Barriers  |  Load1; LoadStore; Store2     |确保Load1数据装载，之前于Store2及所有后续的存储指令刷新到内存。
+StoreLoad Barriers  |  Store1; StoreLoad; Load2     |确保Store1数据对其他处理器变得可见（指刷新到内存），之前于Load2及所有后续装载指令的装载。StoreLoad Barriers会使该屏障之前的所有内存访问指令（存储和装载指令）完成之后，才执行该屏障之后的内存访问指令。
 
 **StoreLoad Barriers是一个“全能型”的屏障**，它同时具有其他三个屏障的效果。现代的多处理器大都支持该屏障（其他类型的屏障不一定被所有处理器支持）。执行该屏障开销会很昂贵，因为当前处理器通常要把写缓冲区中的数据全部刷新到内存中（buffer fully flush）。
 
@@ -902,7 +902,7 @@ CAS 通常是配合无限循环一起使用的，如果 CAS 失败，会一直�
 ### 2. Lock接口
 锁是用来控制多个线程访问共享资源的方式，一般来说，一个锁能发挥功能之多个线程同事访问共享资源（读写锁除外）。在Lock接口出现前，Java程序依靠synchronized关键字实现锁功能，在Java 1.5 后，并发包新增了Lock接口以及相关实现类来实现锁功能。它提供了与synchronized关键字类似的同步功能，只是在**使用时需要显示地获取和释放锁**。虽然它缺少了（通过synchronized块或者方法所提供的）隐式获取释放锁的便捷性，但是却拥有了锁获取与释放的可操作性、可中断的获取锁以及超时获取锁等多种synchronized关键字所不具备的同步特性。
 
-```
+```java
 Lock lock = new ReentrantLock();
 lock.lock();
 try{
@@ -925,6 +925,7 @@ void unlock() 	| 释放锁
 Condition new Condition() | 	获取等待通知组件，该组件和当前线程的锁绑定，当前线程只有获得了锁，才能调用该组件的wait()方法，而调用后，当前线程将释放锁
 
 <font color=red><b>synchronized与Lock的比较</b></font> 
+
 方面 | synchronized | Lock
 --- | --- | ---
 使用 | 隐式锁，使用sync关键字的时候，根本不用写其他的代码，然后程序就能够获取锁和释放锁了。| 显示锁，需要手动的获取和释放锁。如果没有释放锁，就有可能导致出现死锁的现象。
@@ -966,6 +967,9 @@ ReentrantLock在调用lock()方法时，已经获取到锁的线程，能够再�
 ### 5. ReentrantReadWriteLock 读写锁
 #### 5.1 简介
 之前提到锁（如Mutex，ReentrantLock，synchronized）都是排他锁，而**读写锁在同一时刻可以允许多个读线程访问， 但是在写线程访问时，所有的读线程和其他写线程均被阻塞**。**读写锁维护了一对 锁**，一个读锁和一个写锁，通过分离读锁和写锁，使得并发性相比一般的排他锁 有了很大提升。
+
+- 当读写锁是**写**加锁状态时, 在这个锁被解锁之前, 所有试图对这个锁加锁的线程都会被阻塞.
+- 当读写锁在**读**加锁状态时, 所有试图以读模式对它进行加锁的线程都可以得到访问权, 但是如果线程希望以写模式对此锁进行加锁, 它必须直到所有的线程释放锁
 
 在没有读写锁支持的（Java5 之前）时候，如果需要完成上述工作就要使用 Java 的等待通知机制，就是当写操作开始时，所有晚于写操作的读操作均会进入 等待状态，只有写操作完成并进行通知之后，所有等待的读操作才能继续执行（写 操作之间依靠 synchronized 关键进行同步），这样做的目的是使读操作能读取到 正确的数据，不会出现脏读。改用读写锁实现上述功能，只需要**在读操作时获取读锁，写操作时获取写锁**即可。当写锁被获取到时，后续（非当前写操作线程） 的读写操作都会被阻塞，写锁释放之后，所有操作继续执行，编程方式相对于使 用等待通知机制的实现方式而言，变得简单明了。 
 

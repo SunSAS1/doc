@@ -982,7 +982,7 @@ ReentrantLock在调用lock()方法时，已经获取到锁的线程，能够再�
 根据状态的划分能得出一个推论：S不等于0时，当写状态(S&0x0000FFFF)等于0时，则读状态（S>>>16）大于0，即读锁已被获取。
 
 ##### 5.2.2 写锁获取与释放
-写锁是一个支持重进人的排它锁。如果当前线程已经获取了写锁，则增加写状态。如果当前线程在获取写锁时，读锁已经被获取（读状态不为0）或者该线程不是已经获取写锁的线程，则当前线程进人等待状态。
+写锁是一个支持重进入的排它锁。如果当前线程已经获取了写锁，则增加写状态。如果当前线程在获取写锁时，读锁已经被获取（读状态不为0）或者该线程不是已经获取写锁的线程，则当前线程进人等待状态。
 
 ```java
 protected final boolean tryAcquire(int acquires) {
@@ -1619,7 +1619,7 @@ public List<String> findPrice2(String product) {
 
 **3.使用 CompletableFuture 发起异步请求**
 
-```
+```java
 public List<String> findPrice3(String product) {
     List<CompletableFuture<String>> futures = shops.stream()
             .map(shop -> CompletableFuture.supplyAsync(

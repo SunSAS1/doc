@@ -559,11 +559,12 @@ select * from areas where id in (select city_id from deals where deals.name = 'x
 1. **用exists替代in**  
 使用exists(或not exists)通常将提高查询的效率。 
 举例：
+
 ```
 -- 低效 
 select ... from table1 t1 where t1.id > 10 and pno in (select no from table2 where name like 'www%');
 -- 高效 
-select ... from table1 t1 where t1.id > 10 and exists (select 1 from table2 t2 where t1.pno = t2.no and name like 'www%'); 
+select ... from table1 t1 where t1.id > 10 and exists (select 1 from table2 t2 where t1.pno = t2.no and name like 'www%');
 ```
 2. **用not exists替代not in**  
 无论在哪种情况下，**not in都是最低效的** (因为它对子查询中的表执行了一个全表遍历)。 
@@ -571,22 +572,22 @@ select ... from table1 t1 where t1.id > 10 and exists (select 1 from table2 t2 w
 3. **用exists替换distinct**  
 当提交一个包含一对多表信息的查询时,避免在select子句中使用distinct. 一般可以考虑用exists替换。  
 exists使查询更为迅速,因为RDBMS核心模块将在子查询的条件一旦满足后,立刻返回结果. 
-``` 
--- 低效 
-select distinct d.dept_no, d.dept_name from t_dept d, t_emp e where d.dept_no = e.dept_no; 
--- 高效 
-select d.dept_no, d.dept_name from t_dept d where exists (select 1 from t_emp where d.dept_no = e.dept_no); 
-```
-4.** 用表连接替换exists**  
+    ``` 
+    -- 低效 
+    select distinct d.dept_no, d.dept_name from t_dept d, t_emp e where d.dept_no = e.dept_no; 
+    -- 高效 
+    select d.dept_no, d.dept_name from t_dept d where exists (select 1 from t_emp where d.dept_no = e.dept_no); 
+    ```
+4.**用表连接替换exists**  
 通常来说，采用表连接的方式比exists更有效率。 
 
-```
--- 低效 
-select ename from emp e where exists (select 1 from dept where dept_no = e.dept_no and dept_cat = 'W'); 
-SELECT ENAME 
--- 高效 
-select ename from dept d, emp e where e.dept_no = d.dept_no and dept_cat = 'W';
-```
+    ```
+    -- 低效 
+    select ename from emp e where exists (select 1 from dept where dept_no = e.dept_no and dept_cat = 'W'); 
+    SELECT ENAME 
+    -- 高效 
+    select ename from dept d, emp e where e.dept_no = d.dept_no and dept_cat = 'W';
+    ```
 
 
 
@@ -619,10 +620,10 @@ select ename from dept d, emp e where e.dept_no = d.dept_no and dept_cat = 'W';
 
 ### 并发事务处理带来的问题
 越往上事务隔离级别越低
-- **更新丢失（Lost Update)**：事务A和事务B选择同一行，然后基于最初选定的值更新该行时，由于两个事务都不知道彼此的存在，就会发生丢失更新问题
-- **脏读(Dirty Reads)**：事务A读取了事务B更新的数据，然后B回滚操作，那么A读取到的数据是脏数据
-- **不可重复读（Non-Repeatable Reads)**：事务 A 多次读取同一数据，事务B在事务A多次读取的过程中，对数据作了更新并提交，导致事务A多次读取同一数据时，结果不一致。（MySQL的默认隔离级别能防止以上三个）
-- **幻读（Phantom Reads)**：幻读与不可重复读类似。它发生在一个事务A读取了几行数据，接着另一个并发事务B插入了一些数据时。在随后的查询中，事务A就会发现多了一些原本不存在的记录，就好像发生了幻觉一样，所以称为幻读。
+- **更新丢失**（Lost Update)：事务A和事务B选择同一行，然后基于最初选定的值更新该行时，由于两个事务都不知道彼此的存在，就会发生丢失更新问题
+- **脏读**(Dirty Reads)：事务A读取了事务B更新的数据，然后B回滚操作，那么A读取到的数据是脏数据
+- **不可重复读**（Non-Repeatable Reads)：事务 A 多次读取同一数据，事务B在事务A多次读取的过程中，对数据作了更新并提交，导致事务A多次读取同一数据时，结果不一致。（MySQL的默认隔离级别能防止以上三个）
+- **幻读**（Phantom Reads)：幻读与不可重复读类似。它发生在一个事务A读取了几行数据，接着另一个并发事务B插入了一些数据时。在随后的查询中，事务A就会发现多了一些原本不存在的记录，就好像发生了幻觉一样，所以称为幻读。
 
 
 > **幻读和不可重复读的区别：**
@@ -694,8 +695,8 @@ SELECT @@tx_isolation;
 Serializable 是最高的事务隔离级别，在该级别下，事务串行化顺序执行，可以避免脏读、不可重复读与幻读。简单来说，**Serializable会在读取的每一行数据上都加锁，所以可能导致大量的超时和锁争用问题。这种事务隔离级别效率低下，比较耗数据库性能，一般不使用。**
 
 
-事务隔离级别 |读数据一致性| 脏读 | 不可重复读 | 幻读 |
----|---|---|---|---|---
+事务隔离级别 |读数据一致性| 脏读 | 不可重复读 | 幻读 
+---|---|---|---|---
 读未提交（read-uncommitted） | 最低级别，只能保证不读取物理上损坏的数据 | 是 | 是 | 是
 读已提交（read-committed） | 语句级 | 否 | 是 | 是
 可重复读（repeatable-read）| 事务级 | 否 | 否 | 是
@@ -750,7 +751,7 @@ InnoDB 的 MVCC，是通过在每行记录后**面保存两个隐藏的列**来�
 > **注意**
 >
 >1. MVCC手段只适用于Msyql隔离级别中的读已提交（Read committed）和可重复读（Repeatable Read）
->2. Read uncimmitted由于存在脏读，即能读到未提交事务的数据行，所以不适用MVCC.原因是MVCC的创建版本和删除版本只要在事务提交后才会产生。
+>2. Read uncommitted由于存在脏读，即能读到未提交事务的数据行，所以不适用MVCC.原因是MVCC的创建版本和删除版本只要在事务提交后才会产生。
 >3. 串行化由于是会对所涉及到的表加锁，并非行锁，自然也就不存在行的版本控制问题。
 >4. 通过以上总结，可知，MVCC主要作用于事务性的，有行锁控制的数据库模型。
 
@@ -877,7 +878,7 @@ SELECT ... FOR UPDATE;
 > MyISAM在执行查询语句SELECT前，会自动给涉及的所有表加**读锁**，在执行更新操作（UPDATE、DELETE、INSERT等）前，会自动给涉及的表加**写锁**，这个过程并不需要用户干预
 
 ### 表锁与行锁
-**表锁**：开销小，加锁快；不会出现死锁；锁定力度大，发生锁冲突概率高，并发度最低。
+**表锁**：开销小，加锁快；不会出现死锁；锁定粒度大，发生锁冲突概率高，并发度最低。
 
 **行锁**：开销大，加锁慢；会出现死锁；锁定粒度小，发生锁冲突的概率低，并发度高
 
@@ -897,7 +898,7 @@ MyISAM 表的读操作与写操作之间，以及写操作之间是串行的。�
 
 为了允许行锁和表锁共存，实现多粒度锁机制，**InnoDB**还有两种内部使用的意向锁（Intention Locks），这两种意向锁都是**表锁**：
 
-- 意向共享锁（IS）：���务打算给数据行加行共享锁，事务在给一个数据行加共享锁前必须先取得该表的IS锁。
+- 意向共享锁（IS）：事务打算给数据行加行共享锁，事务在给一个数据行加共享锁前必须先取得该表的IS锁。
 - 意向排他锁（IX）：事务打算给数据行加行排他锁，事务在给一个数据行加排他锁前必须先取得该表的IX锁。
 
 > 意向锁是数据库隐式帮我们做了，不需要程序员操心！
@@ -953,7 +954,7 @@ innodb对于主键使用了聚簇索引，这是一种数据存储方式，表�
 由于token是二级索引，因此首先锁住二级索引（两行），接着会锁住相应主键所对应的记录；
 ![3](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/e0ac34fd99404ccdee4ab1ec4889f47754ffcd82.png)
 3. `delete from msg where message=订单号是多少’；`  
-由于token是二级索引，因此首先锁住二级索引（两行），接着会锁住相应主键所对应的记录；
+message没有索引，所以走的是全表扫描过滤。这时表上的各个记录都将添加上X锁。
 ![4](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/aa9a94c735ec35cfe92cd5eca1015893aad8de58.png)
 
 ### 悲观锁与乐观锁

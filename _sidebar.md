@@ -21,7 +21,10 @@
 
 * Spring Boot
 
-* Spring Cloud
+* 分布式
+  * [5.1 分布式](sunsas/分布式)
+  * [5.2 Spring Cloud开发分布式权限管理系统](sunsas/分布式权限管理系统)
+
 
 * [简历](sunsas/简历)
 

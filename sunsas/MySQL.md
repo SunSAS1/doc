@@ -602,9 +602,9 @@ select * from areas where id in (select city_id from deals where deals.name = 'x
 举例：
 
 ```
--- 低效 
+--低效 
 select ... from table1 t1 where t1.id > 10 and pno in (select no from table2 where name like 'www%');
--- 高效 
+--高效 
 select ... from table1 t1 where t1.id > 10 and exists (select 1 from table2 t2 where t1.pno = t2.no and name like 'www%');
 ```
 2. **用not exists替代not in**  
@@ -613,27 +613,30 @@ select ... from table1 t1 where t1.id > 10 and exists (select 1 from table2 t2 w
 3. **用exists替换distinct**  
 当提交一个包含一对多表信息的查询时,避免在select子句中使用distinct. 一般可以考虑用exists替换。  
 exists使查询更为迅速,因为RDBMS核心模块将在子查询的条件一旦满足后,立刻返回结果. 
-    ``` 
-    -- 低效 
-    select distinct d.dept_no, d.dept_name from t_dept d, t_emp e where d.dept_no = e.dept_no; 
-    -- 高效 
-    select d.dept_no, d.dept_name from t_dept d where exists (select 1 from t_emp where d.dept_no = e.dept_no); 
-    ```
+
+``` 
+--低效 
+select distinct d.dept_no, d.dept_name from t_dept d, t_emp e where d.dept_no = e.dept_no; 
+--高效 
+select d.dept_no, d.dept_name from t_dept d where exists (select 1 from t_emp where d.dept_no = e.dept_no); 
+```
+
 4.**用表连接替换exists**  
 通常来说，采用表连接的方式比exists更有效率。 
 
-    ```
-    -- 低效 
-    select ename from emp e where exists (select 1 from dept where dept_no = e.dept_no and dept_cat = 'W'); 
-    SELECT ENAME 
-    -- 高效 
-    select ename from dept d, emp e where e.dept_no = d.dept_no and dept_cat = 'W';
-    ```
+```
+-- 低效 
+select ename from emp e where exists (select 1 from dept where dept_no = e.dept_no and dept_cat = 'W'); 
+SELECT ENAME 
+-- 高效 
+select ename from dept d, emp e where e.dept_no = d.dept_no and dept_cat = 'W';
+```
 
 
 
 ### mysql 的内连接、左连接、右连接
 ![Sql Joins](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/SQLJoins.png)
+
 - **内连接**:组合两个表中的记录，返回关联字段相符的记录，也就是返回两个表的交集（阴影）部分。
 - **左连接**:left join 是left outer join的简写，它的全称是左外连接，是外连接中的一种。 左(外)连接，左表(a_table)的记录将会全部表示出来，而右表(b_table)只会显示符合搜索条件的记录。右表记录不足的地方均为NULL。
 - **右连接**: right join是right outer join的简写，它的全称是右外连接，是外连接中的一种。与左(外)连接相反，右(外)连接，左表(a_table)只会显示符合搜索条件的记录，而右表(b_table)的记录将会全部表示出来。左表记录不足的地方均为NULL。

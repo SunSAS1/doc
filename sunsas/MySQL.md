@@ -58,7 +58,9 @@ MySQL的一个优势就在于存储引擎的架构上，**插件式的存储引�
 MySQL服务器使用可插拔的存储引擎体系结构，可以从运行中的 MySQL 服务器加载或卸载存储引擎 。
 
 使用`show engine;`命令查看MySQL支持的引擎。
+
 ![MySQL支持的引擎](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/mysql%E5%AD%98%E5%82%A8%E5%BC%95%E6%93%8E.png)
+
 这里是MySQL5.7版本，可见现在默认引擎是InnoDB。
 
 
@@ -118,10 +120,19 @@ Memory类型的存储引擎主要用于哪些内容变化不频繁的代码表�
 5. **InnoDB 最小的锁粒度是行锁，MyISAM 最小的锁粒度是表锁**。一个更新语句会锁住整张表，导致其他查询和更新都会被阻塞，因此并发访问受限。这也是 MySQL 将默认存储引擎从 MyISAM 变成 InnoDB 的又一个重要原因；
 
 
+#### 适用场景
+- MyISAM管理非事务表。它提供高速存储和检索，以及全文搜索能力。如果应用中需要执行**大量的SELECT**查询，那么MyISAM是更好的选择。
+- InnoDB用于事务处理应用程序，具有众多特性，包括ACID事务支持。如果应用中需要执行大量的INSERT或UPDATE操作，则应该使用InnoDB，这样可以提高多用户并发操作的性能。
+
+在大数据量，高并发量的互联网业务场景下，请使用InnoDB:
+- **行锁**，对提高并发帮助很大
+- **事务**，对数据一致性帮助很大
+而这两个是InnoDB所特有的。
 
 > 参考
 >
-> [MySQL中四种常用存储引擎的介绍](https://blog.csdn.net/qq_27028821/java/article/details/52267991)
+> [MySQL中四种常用存储引擎的介绍](https://blog.csdn.net/qq_27028821/java/article/details/52267991)   
+> [MyISAM和InnoDB区别和应用场景](https://www.jianshu.com/p/dc60346d55a2)
 
 
 ---
@@ -132,8 +143,9 @@ Memory类型的存储引擎主要用于哪些内容变化不频繁的代码表�
 ### 介绍
 MySQL官方对索引的定义为：**索引（Index）是帮助MySQL高效获取数据的数据结构**，所以说索引的本质是：数据结构。
 
-可以简单的理解为“排好序的快速查找数据结构”，数据本身之外，数据库还维护者一个满足特定查找算法的数据结构，这些数据结构以某种方式引用（指向）数据，这样就可以在这些数据结构上实现高级查找算法。这种数据结构，就是索引。下图是一种可能的索引方式示例:
+可以简单的理解为“排好序的快速查找数据结构”，数据本身之外，数据库还维护者一个满足特定查找算法的数据结构，这些数据结构以某种方式引用（指向）数据，这样就可以在这些数据结构上实现高级查找算法。这种数据结构，就是索引。下图是一种可能的索引方式示例:  
 ![索引方式示例](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/%E7%B4%A2%E5%BC%95%E7%A4%BA%E4%BE%8B.png)
+
 排序二叉树查找自然比线性快，时间复杂度O(logn)。当然这只是示例，MySQL使用的B+树。
 > 平常说的索引，没有特别指明的话，就是B+树（多路搜索树，不一定是二叉树）结构组织的索引。其中聚集索引，次要索引，覆盖索引，符合索引，前缀索引，唯一索引默认都是使用B+树索引，统称索引。此外还有哈希索引等。
 
@@ -198,10 +210,12 @@ ALTER TABLE tbl_name ADD FULLTEXT index_name
 
 
 ### 基本存储结构
-MySQL的基本存储结构是**页**(记录都存在页里边)：
+MySQL的基本存储结构是**页**(记录都存在页里边)：  
 ![页](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/164c6d7a53a7920b.png)
-页是其磁盘管理的最小单位。InnoDB 存储引擎中默认每个页的大小为16KB，可通过参数 innodb_page_size 将页的大小设置为 4K、8K、16K，在 MySQL 中可通过如下命令查看页的大小：`show variables like 'innodb_page_size';`
+
+页是其磁盘管理的最小单位。InnoDB 存储引擎中默认每个页的大小为16KB，可通过参数 innodb_page_size 将页的大小设置为 4K、8K、16K，在 MySQL 中可通过如下命令查看页的大小：`show variables like 'innodb_page_size';`  
 ![页2](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/164c6d7a53b78847.png)
+
 - 各个数据页可以组成一个**双向链表**。
 - 而**每个数据页中的记录又可以组成一个单向链表** 。
 - 每个数据页都会为存储在它里边儿的记录生成一个页目录，在通过主键查找某条记录的时候可以在页目录中使用二分法快速定位到对应的槽，然后再遍历该槽对应分组中的记录即可快速找到指定的记录。
@@ -222,9 +236,11 @@ B-Tree 结构的数据可以让系统高效的找到数据所在的磁盘块。�
 8. Pi(i=1,…n)为指向子树根节点的指针。
 9. P(i-1)指向的子树的所有节点关键字均小于ki，但都大于k(i-1)
 
-一个3阶的B-Tree：
+一个3阶的B-Tree：  
 ![B-Tree](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/B-Tree.png)
+
 ![B-Tree](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/B-Tree4.JPG)
+
 类似排序二叉树，要求父节点值比左节点的都大，比右节点的都小。  
 每个节点占用一个盘块的磁盘空间，一个节点上有两个升序排序的关键字（例如一层的17，35）和三个指向子树根节点的指针（p1,p2,p3），指针存储的是子节点所在磁盘块的地址。由定义可知根节点中p1指向的范围应该小于17，P2指针指向的子树的数据范围为17~35，P3指针指向的子树的数据范围为大于35。
 
@@ -246,8 +262,9 @@ B+Tree 是在 B-Tree 基础上的一种优化，使其更适合实现外存储�
 3. 数据记录都存放在叶子节点中。
 
 
-由于B+Tree的非叶子节点只存储键值信息，假设每个磁盘块能存储4个键值及指针信息，则变成B+Tree后其结构如下图所示：
+由于B+Tree的非叶子节点只存储键值信息，假设每个磁盘块能存储4个键值及指针信息，则变成B+Tree后其结构如下图所示：  
 ![B+Tree](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/B%2BTree.png)
+
 ![B+Tree](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/B%2Btree5.JPG)
 
 B+树的头指针有两个，一个指向根节点，另一个指向关键字最小的元素(上图DATA)，因此B+树有两种遍历的方式：
@@ -265,13 +282,15 @@ InnoDB存储引擎中页的大小为16KB，一般表的主键类型为INT（占�
 > 用B+树不用B树考虑的是IO对性能的影响，B树的每个节点都存储数据，而B+树只有叶子节点才存储数据，所以查找相同数据量的情况下，B树的高度更高，IO更频繁。数据库索引是存储在磁盘上的，当数据量大时，就不能把整个索引全部加载到内存了，只能逐一加载每一个磁盘页（对应索引树的节点）。其中在MySQL底层对B+树进行进一步优化：在叶子节点中是双向链表，且在链表的头结点和尾节点也是循环指向的。
 
 还有一个**B*树**：
-B*树：在B+树基础上，为非叶子结点也增加链表指针，将结点的最低利用率从1/2提高到2/3。
+B*树：在B+树基础上，为非叶子结点也增加链表指针，将结点的最低利用率从1/2提高到2/3。 
 ![B星树](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/BxingTree6.JPG)
+
 ### 主键索引与辅助索引
 #### MyISAM
 MyISAM引擎的索引文件和数据文件是分离的。MyISAM引擎索引结构的叶子节点的数据域，存放的并不是实际的数据记录，而是数据记录的地址。**索引文件与数据文件分离，这样的索引称为"非聚簇索引"**。MyISAM的主索引与辅助索引区别并不大，只是主键索引不能有重复的关键字。
 
 ![MyISAM](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/MyISAM%E7%B4%A2%E5%BC%95.png)
+
 在MyISAM中，索引（含叶子节点）存放在单独的.myi文件中，叶子节点存放的是数据的物理地址偏移量（通过偏移量访问就是随机访问，速度很快）。
 
 主索引是指主键索引，键值不可能重复；辅助索引则是普通索引，键值可能重复。
@@ -284,7 +303,7 @@ InnoDB引擎索引结构的叶子节点的数据域，存放的就是实际的�
 
 **主键索引**
 
-InnoDB索引是**聚集索引**，它的索引和数据是存入同一个.idb文件中的，因此它的索引结构是在同一个树节点中同时存放索引和数据，如下图中最底层的叶子节点有三行数据，对应于数据表中的id、stu_id、name数据项。
+InnoDB索引是**聚集索引**，它的索引和数据是存入同一个.idb文件中的，因此它的索引结构是在同一个树节点中同时存放索引和数据，如下图中最底层的叶子节点有三行数据，对应于数据表中的id、stu_id、name数据项。  
 ![InnoDB](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/InnoDB%E7%B4%A2%E5%BC%95.png)
 
 **辅助（非主键）索引**
@@ -336,8 +355,9 @@ InnoDB 存储结构，索引与数据是共同存储的，不管是主键索引�
 - 如果主键比较大的话，那辅助索引将会变的更大，因为辅助索引的叶子存储的是主键值；过长的主键值，会导致非叶子节点占用占用更多的物理空间
 
 ### Hash索引
-主要就是通过Hash算法（常见的Hash算法有直接定址法、平方取中法、折叠法、除数取余法、随机数法），将数据库字段数据转换成定长的Hash值，与这条数据的行指针一并存入Hash表的对应位置；如果发生Hash碰撞（两个不同关键字的Hash值相同），则在对应Hash键下以链表形式存储。
+主要就是通过Hash算法（常见的Hash算法有直接定址法、平方取中法、折叠法、除数取余法、随机数法），将数据库字段数据转换成定长的Hash值，与这条数据的行指针一并存入Hash表的对应位置；如果发生Hash碰撞（两个不同关键字的Hash值相同），则在对应Hash键下以链表形式存储。  
 ![Hash索引](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/Hash%E7%B4%A2%E5%BC%95.jpg)
+
 检索算法：在检索查询时，就再次对待查关键字再次执行相同的Hash算法，得到Hash值，到对应Hash表对应位置取出数据即可，如果发生Hash碰撞，则需要在取值时进行筛选。目前使用Hash索引的数据库并不多，主要有**Memory**等。
 
 **劣势：**
@@ -751,15 +771,18 @@ InnoDB 的 MVCC，是通过在每行记录后**面保存两个隐藏的列**来�
 
 1. **Insert**：记录的版本号即当前事务的版本号。  
 执行一条数据语句：`insert into testmvcc values(1,"test");`
-假设事务id为1，那么插入后的数据行如下：
+假设事务id为1，那么插入后的数据行如下：  
 ![1](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/1536286392011332dc79980.jpg)
+
 2. **Update**:先标记旧的那行记录为已删除，并且删除版本号是事务版本号，然后插入一行新的记录的方式。  
 比如，针对上面那行记录，事务Id为2 要把name字段更新
-`update table set name= 'new_value' where id=1;`
+`update table set name= 'new_value' where id=1;`  
 ![2](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/15362864790262a85896e55.jpg)
+
 3. **delete**：把事务版本号作为删除版本号。
-`delete from table where id=1;`
+`delete from table where id=1;`  
 ![3](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/15362865324150dfbc7bf66.jpg)
+
 4. **Select**:
 从上面的描述可以看到，在查询时要符合以下两个条件的记录才能被事务查询出来：
 
@@ -965,17 +988,19 @@ SELECT * FROM products WHERE id LIKE '3' FOR UPDATE;
 
 > 假设我们有一张消息表（msg），里面有3个字段。假设id是主键，token是非唯一索引，message没有索引。
 
-innodb对于主键使用了聚簇索引，这是一种数据存储方式，表数据是和主键一起存储，主键索引的叶结点存储行数据。对于普通索引，其叶子节点存储的是主键值。(之前也讲过了)
+innodb对于主键使用了聚簇索引，这是一种数据存储方式，表数据是和主键一起存储，主键索引的叶结点存储行数据。对于普通索引，其叶子节点存储的是主键值。(之前也讲过了)  
 ![1](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/bdc940fef6f0c3bf2c7277f2614bd0d2e5563124.png)
 
 1. `delete from msg where id=2；`  
-由于id是主键，因此直接锁住整行记录即可。
+由于id是主键，因此直接锁住整行记录即可。  
 ![2](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/2f67547e0caa0d1ea9bc7cb53966eedf70d49db3.png)
+
 2. `delete from msg where token=’ cvs’;`   
-由于token是二级索引，因此首先锁住二级索引（两行），接着会锁住相应主键所对应的记录；
+由于token是二级索引，因此首先锁住二级索引（两行），接着会锁住相应主键所对应的记录；  
 ![3](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/e0ac34fd99404ccdee4ab1ec4889f47754ffcd82.png)
+
 3. `delete from msg where message=订单号是多少’；`  
-message没有索引，所以走的是全表扫描过滤。这时表上的各个记录都将添加上X锁。
+message没有索引，所以走的是全表扫描过滤。这时表上的各个记录都将添加上X锁。  
 ![4](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/aa9a94c735ec35cfe92cd5eca1015893aad8de58.png)
 
 ### 悲观锁与乐观锁
@@ -998,7 +1023,7 @@ select * from xxxx for update
 
 乐观锁相对悲观锁而言，它认为数据一般情况下不会造成冲突，所以在数据进行提交更新的时候，才会正式对数据的冲突与否进行检测，如果发现冲突了，则让返回错误信息，让用户决定如何去做。
 
-利用**数据版本号**（version）机制是乐观锁最常用的一种实现方式，另一种是通过时间戳。一般通过为数据库表增加一个数字类型的 “version” 字段，当读取数据时，将version字段的值一同读出，**数据每更新一次，对此version值+1**。当我们提交更新的时候，判断数据库表对应记录的当前版本信息与**第一次取出来的version**值进行比对，如果数据库表当前版本号与第一次取出来的version值相等，则予以更新，否则认为是过期数据，返回更新失败。
+利用**数据版本号**（version）机制是乐观锁最常用的一种实现方式，另一种是通过时间戳。一般通过为数据库表增加一个数字类型的 “version” 字段，当读取数据时，将version字段的值一同读出，**数据每更新一次，对此version值+1**。当我们提交更新的时候，判断数据库表对应记录的当前版本信息与**第一次取出来的version**值进行比对，如果数据库表当前版本号与第一次取出来的version值相等，则予以更新，否则认为是过期数据，返回更新失败。  
 ![乐观锁](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/4461377-d7472568e615e335.png)
 
 ```
@@ -1085,16 +1110,19 @@ Next-Key 可以理解为一种特殊的间隙锁，也可以理解为一种特�
 
 #### 死锁成因
 1. **不同表相同记录行锁冲突**  
-事务A和事务B操作两张表，但出现循环等待锁情况。
+事务A和事务B操作两张表，但出现循环等待锁情况。  
 ![不同表相同记录行锁冲突](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/da89a5774d02b974b63bf08bf47f146c94e75909.png)
+
 2. **相同表记录行锁冲突**  
-事务A和事务B操作一张表，A处理的id为1、2，B处理的id为2、1。
+事务A和事务B操作一张表，A处理的id为1、2，B处理的id为2、1。  
 ![相同表记录行锁冲突](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/e470063b82bb3d005f6935cb51ec656c2c1a3d1e.png)
+
 3. **不同索引锁冲突**  
-这种情况比较隐晦，事务A在执行时，除了在二级索引加锁外，还会在聚簇索引上加锁，在聚簇索引上加锁的顺序是[1,4,2,3,5]，而事务B执行时，只在聚簇索引上加锁，加锁顺序是[1,2,3,4,5]，这样就造成了死锁的可能性。
+这种情况比较隐晦，事务A在执行时，除了在二级索引加锁外，还会在聚簇索引上加锁，在聚簇索引上加锁的顺序是[1,4,2,3,5]，而事务B执行时，只在聚簇索引上加锁，加锁顺序是[1,2,3,4,5]，这样就造成了死锁的可能性。  
 ![不同索引锁冲突](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/39f0c70708ebb31acaea725bb9b712f780298bdd.png)
+
 3. **gap锁冲突**  
- innodb在RR级别下，如下的情况也会产生死锁，比较隐晦。就是之前说的，RR能防止幻读，但**可能造成死锁**。主要就是间隙锁导致**插入意向锁会被阻塞**。
+ innodb在RR级别下，如下的情况也会产生死锁，比较隐晦。就是之前说的，RR能防止幻读，但**可能造成死锁**。主要就是间隙锁导致**插入意向锁会被阻塞**。  
 ![gap锁冲突](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/cedf457ff5099ef54643ab17d21d041333e74943.png)
 
 #### 检测死锁

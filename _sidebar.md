@@ -12,12 +12,13 @@
   * [数据结构](sunsas/数据结构)
 
 * 数据库
- * [3.1 MySQL基础](sunsas/MySQL)
- * [3.2 MySQL高级](sunsas/MySQL高级)
- * [3.3 Redis](sunsas/Redis)
+
+  * [3.1 MySQL基础](sunsas/MySQL)
+  * [3.2 MySQL高级](sunsas/MySQL高级)
+  * [3.3 Redis](sunsas/Redis)
 
 * 高级
- * [4.1 Netty](sunsas/MySQL)
+  * [4.1 Netty](sunsas/highLevel/Netty)
 
 
 * 分布式

@@ -2,7 +2,7 @@
 
 > 作者：SunSAS
 >
-> **介绍：** 瓷片记录平时遇到一些小知识点
+> **介绍：** 此篇记录平时遇到一些小知识点
 
 
 ## 3.4.1 基础部分
@@ -500,7 +500,6 @@ WHERE
 4. DEPENDENT SUBQUERY 的优化，一般是重写为派生表进行表连接。
 
 ## 3.4.2 索引部分
-## MySQL索引笔记
 
 关于索引可以先看 [3.1.3 MySQL索引](https://sunsas.gitee.io/doc/#/sunsas/MySQL?id=_313-mysql索引)
 

@@ -635,7 +635,7 @@ SELECT * FROM table WHERE b = ? ORDER BY a DESC
 SELECT * FROM table WHERE a > ? AND b = ? 
 ```
 
-### 组合索引优化
+### 5 组合索引优化
 
 **排序优化**：
 
@@ -654,7 +654,7 @@ WHERE o_custkey = 147601 ORDER BY o_orderdate DESC
 
 之前我说过回表，如果查询二级索引有的字段没有，就得去通过主键查询数据了，但如果要回表的数据很多，那其实很影响性能，所以最好是二级索引上包含所查询的数据。
 
-### MySQL索引优化器
+### 6 MySQL索引优化器
 
 MySQL 数据库由 Server 层和 Engine 层组成：
 

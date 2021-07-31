@@ -500,4 +500,213 @@ WHERE
 4. DEPENDENT SUBQUERY 的优化，一般是重写为派生表进行表连接。
 
 ## 3.4.2 索引部分
+## MySQL索引笔记
+
+关于索引可以先看 [3.1.3 MySQL索引](https://sunsas.gitee.io/doc/#/sunsas/MySQL?id=_313-mysql索引)
+
+### 1 B+树索引
+
+关于B+ 树索引具体就不再介绍了，为啥要使用B+ 树，而不是二叉树，哈希索引、红黑树、SkipList。因为它是目前为止排序最有效率的数据结构，当然这是基于磁盘存储海量数据，如果是内存中，一般使用后者。
+
+B+树索引的特点是： **基于磁盘的平衡树**，但树非常矮，通常为 3~4 层，能存放千万到上亿的排序数据。树矮意味着访问效率高，从千万或上亿数据里查询一条数据，只用 3、4 次 I/O。
+
+在 MySQL InnoDB 存储引擎中，一个页的大小为 16K，在上面的表 User 中，键值 userId 是BIGINT 类型，则：
+
+```java
+根节点能最多存放以下多个键值对 = 16K / 键值对大小(8+6) ≈ 1100
+```
+
+再假设表 User 中，每条记录的大小为 500 字节，则：
+
+    叶子节点能存放的最多记录为 = 16K / 每条记录大小 ≈ 32
+
+综上所述，树高度为 2 的 B+ 树索引，最多能存放的记录数为：
+
+    总记录数 = 1100 * 32 =  35,200
+
+同理，树高度为 3 的 B+ 树索引，最多能存放的记录数为：
+
+    总记录数 = 1100（根节点） * 1100（中间节点） * 32 =  38,720,000
+
+不过，在真实环境中，每个页其实利用率并没有这么高，还会存在一些碎片的情况，我们假设每个页的使用率为60%，则：
+
+![image-20210723104048913](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/picgo/image-20210723104048913.png)
+
+### 2 索引开销
+
+索引在插入时，需要进行排序，但是排序开销并不大，真正的开销是插入索引，也就是索引的维护。
+
+- **数据顺序**（或逆序）插入： B+ 树索引的维护代价非常小，叶子节点都是从左往右进行插入，比较典型的是自增 ID 的插入、时间的插入（若在自增 ID 上创建索引，时间列上创建索引，则 B+ 树插入通常是比较快的）。
+- **数据无序**插入： B+ 树为了维护排序，需要对页进行分裂、旋转等开销较大的操作，另外，即便对于固态硬盘，随机写的性能也不如顺序写，所以磁盘性能也会收到较大影响。比较典型的是用户昵称，每个用户注册时，昵称是随意取的，若在昵称上创建索引，插入是无序的，索引维护需要的开销会比较大。
+
+但我们也不可能要求所有顺序都有序，不然也不用索引了。只不过要求**数据库主键索引为有序**，比如使用自增，或使用函数 UUID_TO_BIN 排序的 UUID，而不用无序值做主键。
+
+#### 查询哪些索引未被使用过
+
+在 MySQL 数据库中，可以通过查询表 `sys.schema_unused_indexes`，查看有哪些索引一直未被使用过，可以被废弃。
+
+而 MySQL 8.0 版本推出了索引不可见（Invisible）功能。在删除废弃索引前，用户可以将索引设置为对优化器不可见，然后观察业务是否有影响。若无，DBA 可以更安心地删除这些索引：
+
+```mysql
+ALTER TABLE t1 
+ALTER INDEX idx_name INVISIBLE/VISIBLE;
+```
+
+### 3 索引组织表
+
+数据存储有 堆表和索引组织表两种方式，其实也就是非聚簇索引和聚簇索引。
+
+堆表中的数据无序存放， 数据的排序完全依赖于索引（Oracle、Microsoft SQL Server、PostgreSQL 早期默认支持的数据存储都是堆表结构）。当堆表的数据发生改变，且位置发生了变更，所有索引中的地址都要更新，这非常影响性能，特别是对于 OLTP 业务。
+
+#### 二级索引
+
+二级索引又叫辅助索引，他很像非聚簇索引，这两个不同之处在于 **非聚簇索引叶子结点存的是数据对应的位置**，**二级索引叶子结点存的是 主键索引对应的主键值**，这样好处是，除非主键发生了更改，大部分情况都不需要维护二级索引。 当然插入了数据还是得维护的。
+
+> 通过主键值再次查询主键索引的操作被称为 **回表**。
+
+上面我们说过，只要求主键索引数据递增，但二级索引上可能有很多不会是有序递增，所以二级索引的维护性能开销相对较大，比如用户昵称，这种可以要求单个用户每天、甚至是每年昵称更新的次数，比如每天更新一次，每年更新三次。
+
+在实际核心业务中，开发同学还有很大可能会设计带有业务属性的主键，但请牢记以下两点设计原则：
+
+- 要比较顺序，对聚集索引性能友好；
+- 尽可能紧凑，对二级索引的性能和存储友好；
+
+#### 函数索引
+
+之前我们说过 数据库规范要求查询条件中函数写在等式右边，而不能写在左边 ，不要在查询时使用 函数表达式，会使索引失效。
+
+如果确实需要加函数，或者代码已经如此写了，线上查询慢，最快的解决办法就是新建**函数索引**。
+
+```mysql
+ALTER TABLE User 
+ADD INDEX 
+idx_func_register_date((DATE_FORMAT(register_date,'%Y-%m')));
+```
+
+暂时解决线上查询慢，下个版本想办法修复掉，没必要用函数索引就不用。
+
+第二种是**结合虚拟列**使用：
+
+```mysql
+CREATE TABLE UserLogin (
+    userId BIGINT,
+    loginInfo JSON,
+    cellphone VARCHAR(255) AS (loginInfo->>"$.cellphone"),
+    PRIMARY KEY(userId),
+    UNIQUE KEY idx_cellphone(cellphone)
+);
+```
+
+cellphone 九十一个虚拟列，它是由后面的表达式计算而成，本身这个列不占用任何的存储空间，而索引 idx_cellphone 实质是一个函数索引。这样做得好处是在写 SQL 时可以直接使用这个虚拟列，而不用写冗长的函数：
+
+```mysql
+-- 不用虚拟列
+SELECT  *  FROM UserLogin
+WHERE loginInfo->>"$.cellphone" = '13918888888'
+
+-- 使用虚拟列
+SELECT  *  FROM UserLogin 
+WHERE cellphone = '13918888888'
+```
+
+对于爬虫类的业务，我们会从网上先爬取很多数据，其中有些是我们关心的数据，有些是不关心的数据。通过虚拟列技术，可以展示我们想要的那部分数据，再通过虚拟列上创建索引，就是对爬取的数据进行快速的访问和搜索。
+
+### 4 组合索引
+
+首先我们注意一个点：
+
+假如有组合索引  (a,b)，那么下面sql都能用到组合索引：
+
+```mysql
+SELECT * FROM table WHERE a = ?
+SELECT * FROM table WHERE a = ? AND b = ?
+SELECT * FROM table WHERE b = ? AND a = ?
+SELECT * FROM table WHERE a = ? ORDER BY b DESC
+SELECT * FROM table WHERE a = ? AND b > ?
+```
+
+关于第三个sql，其实mysql解析就优化了，所以不论你写的位置是如何，都可以用到索引。
+
+关于第四个sql，由于我们索引已经是（a,b）排序，所以可以用到索引，这也是一个**可以优化的点**。
+
+以下sql则不能使用组合索引：
+
+```mysql
+SELECT * FROM table WHERE b = ? ORDER BY a DESC
+SELECT * FROM table WHERE a > ? AND b = ? 
+```
+
+### 组合索引优化
+
+**排序优化**：
+
+刚才我们说过，`SELECT * FROM table WHERE a = ? ORDER BY b DESC` 是可以用到索引的，对于下面sql：
+
+```mysql
+SELECT * FROM orders 
+WHERE o_custkey = 147601 ORDER BY o_orderdate DESC
+```
+
+如果只有一个索引 o_custkey，那么还需要额外的一次时间排序才能得到结果。
+
+为此，我们在表 orders 上创建新的组合索引 idx_custkey_orderdate，对字段（o_custkey，o_orderdate）进行索引，这样就不需要额外的一次排序了。
+
+**覆盖索引**：
+
+之前我说过回表，如果查询二级索引有的字段没有，就得去通过主键查询数据了，但如果要回表的数据很多，那其实很影响性能，所以最好是二级索引上包含所查询的数据。
+
+### MySQL索引优化器
+
+MySQL 数据库由 Server 层和 Engine 层组成：
+
+- Server 层有 SQL 分析器、SQL优化器、SQL 执行器，用于负责 SQL 语句的具体执行过程；
+- Engine 层负责存储具体的数据，如最常使用的 InnoDB 存储引擎，还有用于在内存中存储临时结果集的 TempTable 引擎。
+
+SQL 优化器会分析所有可能的执行计划，选择成本最低的执行，这种优化器称之为：**CBO**（Cost-based Optimizer，基于成本的优化器）。
+
+在 MySQL中，**一条 SQL 的计算成本计算如下所示：**
+
+```java
+Cost  = Server Cost + Engine Cost
+      = CPU Cost + IO Cost
+```
+
+数据库 mysql 下的表 server_cost、engine_cost 则记录了对于各种成本的计算，可以自行查看。这些值自己也是可以改的
+
+#### MySQL索引出错案例
+
+**案例1：未能使用创建的索引**
+
+```mysql
+EXPLAIN FORMAT=tree 
+SELECT * FROM orders 
+WHERE o_orderdate > '1994-01-01' 
+AND o_orderdate < '1994-12-31'\G
+*************************** 1. row ***************************
+EXPLAIN: -> Filter: ((orders.O_ORDERDATE > DATE'1994-01-01') and (orders.O_ORDERDATE < DATE'1994-12-31'))  (cost=592267.11 rows=1876082)
+    -> Table scan on orders  (cost=592267.11 rows=5799601)
+
+EXPLAIN FORMAT=tree 
+SELECT * FROM orders FORCE INDEX(idx_orderdate)
+WHERE o_orderdate > '1994-01-01' 
+AND o_orderdate < '1994-12-31'\G
+*************************** 1. row ***************************
+EXPLAIN: -> Index range scan on orders using idx_orderdate, with index condition: ((orders.O_ORDERDATE > DATE'1994-01-01') and (orders.O_ORDERDATE < DATE'1994-12-31'))  (cost=844351.87 rows=1876082)
+```
+
+o_orderdate 是一个二级索引，但是执行上面sql语句却没有使用该索引，这是因为走索引成本更高，下面强制使用索引的 cost 为 844351.87，MySQL认为全表扫描低于使用二级索引。故，MySQL 优化器没有使用二级索引 idx_orderdate。二级索引是回表的数据过多导致不如全表扫描，如果回表数据没那么多，就会使用二级索引了。
+
+**案例2：索引创建在有限状态上**
+
+我们通常说有限状态的列不应该建立索引，不过这种是基于状态分布均匀的列，比如性别，比例大致为1：1。但有的列会有很大的**数据倾斜**，比如订单状态，有已支付，未支付，取消等几个状态。但是大部分的是已支付和取消。有时我们想查询有哪些订单是未支付的，就在订单状态列 o_orderstatus 添加了索引。
+
+然而查询结果看，并没有使用到这个索引，优化器会认为订单状态为 未支付 的订单占用 1/3 的数据，使用全表扫描，避免二级索引回表的效率会更高。
+
+这种情况下，我们可以利用 MySQL 8.0 的直方图功能，创建一个**直方图**，让优化器知道数据的分布，从而更好地选择执行计划。直方图的创建命令如下所示：
+
+```mysql
+ANALYZE TABLE orders 
+UPDATE HISTOGRAM ON o_orderstatus;
+```
+
 

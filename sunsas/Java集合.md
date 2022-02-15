@@ -9,7 +9,7 @@
 ### ArrayList简介
 ArrayList 的底层是数组队列，相当于动态数组。与 Java 中的数组相比，它的容量能动态增长。在添加大量元素前，应用程序可以使用`ensureCapacity`操作来增加 ArrayList 实例的容量。这可以减少递增式再分配的数量。
 
-![ArrayList类结构](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/QQ%E5%9B%BE%E7%89%8720200709151618.png)
+![ArrayList类结构](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/picgo2022image-20220215153405264.png)
 
 它继承于 AbstractList，实现了 List, RandomAccess, Cloneable, java.io.Serializable 这些接口。
 

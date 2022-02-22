@@ -751,6 +751,7 @@ ThreadLocal.ThreadLocalMap threadLocals = null
 现在再来看set()/get()就很清晰了：
 
 ```java
+// ThreadLocal类
 public void set(T value) {
     //取得当前线程，并获取它的threadLocals
     Thread t = Thread.currentThread();
@@ -774,6 +775,10 @@ public T get() {
     }
     return setInitialValue();
 }
+// getMap 实际是拿到线程 t 里的 ThreadLocalMap 对象
+ThreadLocalMap getMap(Thread t) {
+    return t.threadLocals;
+}
 ```
 
 1. 每个Thread维护着一个ThreadLocalMap的引用
@@ -785,13 +790,20 @@ public T get() {
 #### 10.4 ThreadLocal内存泄露
 ![ThreadLocal](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/20200806/91ef76c6a7efce1b563edc5501a900dbb58f6512.jpeg)
 
-ThreadLocalMap中的Entry的key使用的是ThreadLocal对象的弱引用，再没有其他地方对ThreadLoca依赖，ThreadLocalMap中的ThreadLocal对象就会被回收掉，但是对应value的不会被回收，这个时候Map中就可能存在key为null但是value不为null的项，由于**ThreadLocalMap的生命周期跟Thread一样长，如果没有手动删除对应key就会导致内存泄漏**。这需要实际的时候使用完毕及时**调用remove方法**避免内存泄漏。
+ThreadLocalMap中的Entry的key使用的是ThreadLocal对象的弱引用，若没有其他地方对ThreadLocal依赖，ThreadLocalMap中的ThreadLocal对象就会被回收掉，但是对应value的不会被回收，这个时候Map中就可能存在key为null但是value不为null的项，由于**ThreadLocalMap的生命周期跟Thread一样长，如果没有手动删除对应key就会导致内存泄漏**。这需要实际的时候使用完毕及时**调用remove方法**避免内存泄漏。
+> 需要注意的是弱引用不是导致内存泄漏的原因，相反使用弱引用就是为了避免内存泄漏。内存泄漏的原因是**ThreadLocalMap的生命周期跟Thread一样长**。
 
+**为什么使用弱引用？**
+
+其实是ThreadLocal为了避免内存泄漏所做的。如果使用的是强引用，ThreadLocal 的引用对象被回收，但是ThreadLocalMap里还持有ThreadLocal的强引用，如果没有手动删除，导致Entry内存泄漏。
+
+所以使用了弱引用，由于ThreadLocalMap持有ThreadLocal的弱引用，即使没有手动删除，下一次GC时ThreadLocal也会被回收。当key为null，在下一次ThreadLocalMap调用set(),get(),remove()方法的时候会被清除value值。
+> 可参考 [ThreadLocal的内存泄露的原因分析以及如何避免](https://zhuanlan.zhihu.com/p/102571059)
 
 #### 10.5 ThreadLocal的应用
 
 ##### 1. Spring实现事务隔离级别
-Spring采用Threadlocal的方式，来**保证单个线程中的数据库操作使用的是同一个数据库连接**，同时，采用这种方式可以使业务层使用事务时不需要感知并管理connection对象，通过传播级别，巧妙地管理多个事务配置之间的切换，挂起和恢复。Spring框架里面就是用的ThreadLocal来实现这种隔离，主要是在TransactionSynchronizationManager这个类里面
+Spring采用ThreadLocal的方式，来**保证单个线程中的数据库操作使用的是同一个数据库连接**，同时，采用这种方式可以使业务层使用事务时不需要感知并管理connection对象，通过传播级别，巧妙地管理多个事务配置之间的切换，挂起和恢复。Spring框架里面就是用的ThreadLocal来实现这种隔离，主要是在TransactionSynchronizationManager这个类里面
 ##### 2. 避免一些参数传递
 避免一些参数的传递的理解可以参考一下Cookie和Session：
 
@@ -820,7 +832,7 @@ RpcContext是一个ThreadLocal的临时状态记录器，当接收到RPC请求�
 finally中⼿动remove，不然会有内存泄漏的问题
 
 ##### 5. 读写锁中
-读锁中每个线程各自获取读锁的次数只能保存在ThreadLoacal中。
+读锁中每个线程各自获取读锁的次数只能保存在ThreadLocal中。
 
 > 参考
 >
@@ -1143,7 +1155,7 @@ Condition接口其下的实现类有ConditionObject，它是同步器AQS的内�
 ![节点从等待队列移动到同步队列](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/20200806/648116-20180515071122335-2001301461.png)
 被唤醒的线程将从await方法中的while循环中退出。随后加入到同步状态的竞争当中去。成功获取到竞争的线程则会返回到await方法之前的状态。
 
-> Condition的signalAll()方法。相当于对等待队列中的每个节点均质性一次signal()方法，效果就是将等待队列中的所有节点全部移动到同步队列中，并唤醒每个节点的线程
+> Condition的signalAll()方法。相当于对等待队列中的每个节点均执行一次signal()方法，效果就是将等待队列中的所有节点全部移动到同步队列中，并唤醒每个节点的线程
 
 ### 7. StampedLock
 StampedLock类,在JDK1.8时引入,是对读写锁ReentrantReadWriteLock的增强,该类提供了一些功能,优化了读锁、写锁的访问,同时使读写锁之间可以互相转换,更细粒度控制并发。  

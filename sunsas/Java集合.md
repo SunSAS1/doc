@@ -208,7 +208,7 @@ public static <T,U> T[] copyOf(U[] original, int newLength, Class<? extends T[]>
 ### 简介
 LinkedList是一个实现了List接口和Deque接口的双端链表。 LinkedList底层的链表结构使它支持高效的插入和删除操作。
 
-![LinkedList类结构图](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/QQ%E5%9B%BE%E7%89%8720200710112156.png)
+![LinkedList类结构图](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/picgo2022image-20220215165351540.png)
 
 `LinkedList`与`ArrayList`在于前者底层使用链表，而后者底层使用数组，这也决定了`LinkedList`随机访问缓慢，插入删除快,适合用来实现Stack(堆栈)与Queue(队列)；ArrayList随机访问快，插入删除慢。
 
@@ -341,7 +341,7 @@ HashMap底层是**数组**和**链表**结合在一起使用。
 ### 源码
 #### 属性
 
-```
+```java
 //默认的初始容量是16，必须是2的次方
 static final int DEFAULT_INITIAL_CAPACITY = 1 << 4; 
 //最大容量

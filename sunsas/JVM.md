@@ -690,7 +690,7 @@ instanceof result :false
 - **启动类加载器**（Bootstrap Class Loader）：这个类加载器复制加载存放在<JAVA_HOME>\lib目录，或者被-Xbootclasspath参数所指定的路径中存放的，而且是Java虚拟机能够识别的类库加载到虚拟机的内存中。
 如果需要使用引导类加载器去加载类，直接使用null代替即可。
 如下是ClassLoader.getClassLoader()方法的源码：
-```
+```java
 /**
  * Returns the class loader for the class.  Some implementations may use
  * null to represent the bootstrap class loader. This method will return

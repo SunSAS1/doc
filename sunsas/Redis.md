@@ -50,12 +50,18 @@ Zset(Sorted Set) 和 Set 一样是 String 类型元素的集合，且不允许�
 
 **zset底层实现原理**：
 
-有序集合对象的编码可以是ziplist或者skiplist。同时满足以下条件时使用ziplist编码：
+有序集合对象的编码可以是ziplist或者skiplist。
+
+当数据较少时，sorted set是由一个ziplist来实现的。  
+当数据多的时候，sorted set是由一个dict + 一个skiplist来实现的。简单来讲，dict用来查询数据到分数的对应关系，而skiplist用来根据分数查询数据（可能是范围查找）。
+
+同时满足以下条件时使用ziplist编码：
 - 元素数量小于128个
 - 所有member的长度都小于64字节
 
 ![调表](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/image/20200724/skiplist_insertions.png)
 
+从上面skiplist的创建和插入过程可以看出，每一个节点的层数（level）是随机出来的（算法得出），而且新插入一个节点不会影响其它节点的层数。因此，插入操作只需要修改插入节点前后的指针，而不需要对很多节点都进行调整。这就降低了插入操作的复杂度。
 具体参考 [redis zset底层实现原理](https://www.cnblogs.com/yuanfang0903/p/12165394.html)
 
 
@@ -351,21 +357,22 @@ key 可以存活的时间。
 
 ### 8. redis 内存淘汰机制
 redis 提供 6种数据淘汰策略：
-1. **volatile-lru**：从已设置过期时间的数据集（server.db[i].expires）中挑选最近最少使⽤的数
+1. **volatile-lru**：从已设置过期时间的数据集（server.db[i].expires）中挑选最久没有使用的数
 据淘汰
 2. **volatile-ttl**：从已设置过期时间的数据集（server.db[i].expires）中挑选将要过期的数据淘
 汰
 3. **volatile-random**：从已设置过期时间的数据集（server.db[i].expires）中任意选择数据淘汰
-4. **allkeys-lru**：当内存不⾜以容纳新写⼊数据时，在键空间中，移除最近最少使⽤的key（这个是
+4. **allkeys-lru**：当内存不⾜以容纳新写⼊数据时，在键空间中，移除最近最少使⽤的key（由于存expire需要额外内存，所以一般不设置过期时间，这个是
 最常⽤的）
 5. **allkeys-random**：从数据集（server.db[i].dict）中任意选择数据淘汰
 6. **no-eviction**：禁⽌驱逐数据，也就是说当内存不⾜以容纳新写⼊数据时，新写⼊操作会报错。
 这个应该没⼈使⽤吧！
 
 4.0版本后增加以下两种：
-7. **volatile-lfu**：从已设置过期时间的数据集(server.db[i].expires)中挑选最不经常使⽤的数据
+
+7. **volatile-lfu**：从已设置过期时间的数据集(server.db[i].expires)中挑选使用频率最少的数据
 淘汰
-8. **allkeys-lfu**：当内存不⾜以容纳新写⼊数据时，在键空间中，移除最不经常使⽤的key
+8. **allkeys-lfu**：当内存不⾜以容纳新写⼊数据时，在键空间中，移除使用频率最少的的key
 
 > 1. 版本不同，默认的策略不同  
 在2.8.13的版本里，默认是noeviction，在3.2.3版本里默认是volatile-lru

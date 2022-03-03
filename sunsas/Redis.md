@@ -727,7 +727,416 @@ Redis-Cluster采用无中心结构，每个节点保存数据和整个集群状�
 
 参考[全面剖析Redis Cluster原理和应用](https://www.cnblogs.com/xiaomaohai/p/6157597.html)
 
-### 17. 扩展
+### 17 Redis分布式锁
+
+首先说结论，单体Redis加锁，解锁：
+
+```linux
+ # 加锁
+ SET resource_name my_random_value NX PX 30000
+ # 解锁（以下通过Lua脚本实现）
+ if redis.call("get",KEYS[1]) == ARGV[1] then
+    return redis.call("del",KEYS[1])
+ else
+    return 0
+ end
+```
+
+其实官方给的示例就是如此。
+
+> [Redis官方](http://redis.cn/topics/distlock.html)
+
+#### 加锁
+
+首先我们需要满足最基本的需求，锁互斥，我拿到了锁，你就不能拿到。可以使用`SETNX key value`命令
+
+这个命令来自于`SET if Not eXists`的缩写，意思是：如果 `key` 不存在，则设置 `value` 给这个`key`，否则啥都不做。返回1则设置成功，0表示不成功
+
+#### 解锁
+
+很简单，使用 `DEL` 删除这个 `key` 就行。
+
+但是存在异常情况无法执行这个 DEL 命令，比如程序异常了，客户端挂了，那么这个锁就一直无法释放了，所以我们需要加入过期时间。
+
+#### 超时设置锁
+
+加上设置过期时间命令：
+
+```mysql
+> SETNX lock:168 1  // 获取锁
+(integer) 1
+> EXPIRE lock:168 60 // 设置超时时间 60s
+```
+
+但是这样存在一个问题，这两个操作不是原子操作，所以可能还是没法设置超时时间。Redis 2.6.X 之后，官方拓展了 `SET` 命令的参数，满足了当 key 不存在则设置 value，同时设置超时时间的语义，并且满足原子性。
+
+```undefined
+SET resource_name random_value NX PX 30000
+```
+
+- NX：表示只有 `resource_name` 不存在的时候才能 `SET` 成功，从而保证只有一个客户端可以获得锁；
+- PX 30000：表示这个锁有一个 30 秒自动过期时间
+
+释放了不是自己的锁
+
+使用了超时锁后，假如过期时间不够，线程1还没执行完，但锁过期被释放，然后线程2获得锁，此时线程1调用释放锁命令，把线程2的拿到的锁释放了，这就释放了不是自己锁。
+
+#### 加标识
+
+这个标识就是客户端的标识，直接存在 `value` 中即可。在解锁时判断取出来的值与客户端标识是否一致，如果一致再解锁，伪代码如下：
+
+```csharp
+// 比对 value 与 唯一标识
+if (redis.get("lock:168").equals(random_value)){
+   redis.del("lock:168"); //比对成功则删除
+ }
+```
+
+但这个操作会存在原子性问题，所以解锁使用 lua 命令：
+
+```kotlin
+// 获取锁的 value 与 ARGV[1] 是否匹配，匹配则执行 del
+if redis.call("get",KEYS[1]) == ARGV[1] then
+    return redis.call("del",KEYS[1])
+else
+    return 0
+end
+```
+
+> 关于 lua 语法，参考 [Redis 使用lua脚本最全教程](https://blog.csdn.net/le_17_4_6/article/details/117588021?utm_medium=distribute.pc_aggpage_search_result.none-task-blog-2~aggregatepage~first_rank_ecpm_v1~rank_v31_ecpm-4-117588021.pc_agg_new_rank&utm_term=ARGV%E5%92%8Ckey+lua&spm=1000.2123.3001.4430)
+
+#### 锁续期
+
+加标识可以让各客户端释放自己的锁，但是上面还有一个问题需要解决：**如果业务还未执行完，但锁过期了怎么办？**
+
+我们把过期时间延长，自然没有上面的问题，但是如果宕机了，锁没有被释放，这段时间都无法获得锁，除非自己去手动删除。设置的过长，自然没有上面的问题，但是如果宕机了，锁没有被释放，这段时间都无法获得锁，除非自己去手动删除。
+
+我们需要设置合理的过期时间，**一般进行压测后，设置为业务的两倍**。所以上面的问题可能存在，对于这个问题的解决办法就是锁续期。
+
+思路是开启一个定时器，每隔一段时间就去检查客户端是否持有锁（当然需要判断是否是自己加的锁），如果有则续上时间。
+
+```java
+private static final String RENEW_LOCK_SCRIPT =
+"local lockClientId = redis.call('GET', KEYS[1])\n" +
+"if lockClientId == ARGV[1] then\n" +
+" redis.call('PEXPIRE', KEYS[1], ARGV[2])\n" +
+" return true\n" +
+"end\n" +
+"return false";
+```
+
+定时任务，定时执行续锁代码：
+
+```java
+redisTemplate.execute(renewLockScript,
+Collections.singletonList(lockKey), clientId,
+String.valueOf(expireAfter));
+```
+
+> 对于上面的 lua 脚本，key[1] = Collections.singletonList(lockKey), argv[1] = clientId, argv[2] = String.valueOf(expireAfter)
+
+#### 哨兵
+
+**如果客户端宕机了，这个锁还会自动续期么？**
+
+并不会，因为续期的定时器是在这个客户端本身执行，如果客户端宕机，也不会再进行续期，其余客户端想获取锁等到过期自动释放即可。
+
+**如果客户端宕机，想立即释放这个锁怎么办？**
+
+这就需要用到**哨兵**了，这个不是redis的集群哨兵，而是自己写的额外的一个服务，哨兵来维护所有redis客户端的列表。哨兵定时监控客户端是否宕机，一旦发现 client1 宕机，立即删除这个客户端的锁。
+
+![image-20220303172151147](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/picgo2022image-20220303172151147.png)
+
+#### redisson 加锁
+
+上面我们手动写一个定时任务来进行锁续期，但其实使用 Redision 就自带此功能。
+
+Redisson 提供了 watch dog 自动延时机制，提供了一个监控锁的看门狗，它的作用是在Redisson实例被关闭前，不断的延长锁的有效期。也就是说，如果一个拿到锁的线程一直没有完成逻辑，那么看门狗会帮助线程不断的延长锁超时时间，锁不会因为超时而被释放。默认情况下，看门狗的续期时间是30s，也可以通过修改Config.lockWatchdogTimeout来另行指定。
+
+### 18 Redisson
+
+> [Redisson](https://redisson.org/)是架设在[Redis](http://redis.cn/)基础上的一个Java驻内存数据网格（In-Memory Data Grid）。充分的利用了Redis键值数据库提供的一系列优势，基于Java实用工具包中常用接口，为使用者提供了一系列具有分布式特性的常用工具类。使得原本作为协调单机多线程并发程序的工具包获得了协调分布式多机多线程并发系统的能力，大大降低了设计和研发大规模分布式系统的难度。同时结合各富特色的分布式服务，更进一步简化了分布式环境中程序相互之间的协作。
+
+#### 使用
+
+```java
+public static void main(String[] args) {
+
+    Config config = new Config();
+    config.useSingleServer().setAddress("redis://127.0.0.1:6379");
+    config.useSingleServer().setPassword("redis1234");
+    
+    final RedissonClient client = Redisson.create(config);  
+    RLock lock = client.getLock("lock1");
+    
+    try{
+        lock.lock();
+    }finally{
+        lock.unlock();
+    }
+}
+```
+
+#### getLock
+
+获取锁实例
+
+```java
+public RLock getLock(String name) {
+    return new RedissonLock(connectionManager.getCommandExecutor(), name);
+}
+
+public RedissonLock(CommandAsyncExecutor commandExecutor, String name) {
+    super(commandExecutor, name);
+    //命令执行器
+    this.commandExecutor = commandExecutor;
+    //UUID字符串
+    this.id = commandExecutor.getConnectionManager().getId();
+    //内部锁过期时间
+    this.internalLockLeaseTime = commandExecutor.
+                getConnectionManager().getCfg().getLockWatchdogTimeout();
+    this.entryName = id + ":" + name;
+}
+```
+
+#### lock()
+
+```java
+public void lock(long leaseTime, TimeUnit unit) {
+    try {
+        this.lockInterruptibly(leaseTime, unit);
+    } catch (InterruptedException var5) {
+        Thread.currentThread().interrupt();
+    }
+
+}
+
+public void lockInterruptibly() throws InterruptedException {
+    this.lockInterruptibly(-1L, (TimeUnit)null);
+}
+public void lockInterruptibly(long leaseTime, TimeUnit unit) throws InterruptedException {
+    
+    //当前线程ID
+    long threadId = Thread.currentThread().getId();
+    //尝试获取锁
+    Long ttl = tryAcquire(leaseTime, unit, threadId);
+    // 如果ttl为空，则证明获取锁成功
+    if (ttl == null) {
+        return;
+    }
+    //如果获取锁失败，则订阅到对应这个锁的channel
+    RFuture<RedissonLockEntry> future = subscribe(threadId);
+    commandExecutor.syncSubscription(future);
+    try {
+        while (true) {
+            //再次尝试获取锁
+            ttl = tryAcquire(leaseTime, unit, threadId);
+            //ttl为空，说明成功获取锁，返回
+            if (ttl == null) {
+                break;
+            }
+            //ttl大于0 则等待ttl时间后继续尝试获取
+            if (ttl >= 0) {
+                getEntry(threadId).getLatch().tryAcquire(ttl, TimeUnit.MILLISECONDS);
+            } else {
+                getEntry(threadId).getLatch().acquire();
+            }
+        }
+    } finally {
+        //取消对channel的订阅
+        unsubscribe(future, threadId);
+    }
+}
+```
+
+先调用`tryAcquire`来获取锁，如果返回值ttl为空，则证明加锁成功，返回；如果不为空，则证明加锁失败。这时候，它会订阅这个锁的Channel，等待锁释放的消息，然后重新尝试获取锁。流程如下：
+
+![image-20220303194651967](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/picgo2022image-20220303194651967.png)
+
+#### tryAcquire
+
+```java
+private Long tryAcquire(long leaseTime, TimeUnit unit, long threadId) {
+    return (Long)this.get(this.tryAcquireAsync(leaseTime, unit, threadId));
+}
+
+private <T> RFuture<Long> tryAcquireAsync(long leaseTime, TimeUnit unit, final long threadId) {
+
+    //如果带有过期时间，则按照普通方式获取锁
+    if (leaseTime != -1) {
+        return tryLockInnerAsync(leaseTime, unit, threadId, RedisCommands.EVAL_NULL_BOOLEAN);
+    }
+
+    //先按照30秒的过期时间来执行获取锁的方法
+    RFuture<Long> ttlRemainingFuture = tryLockInnerAsync(
+        commandExecutor.getConnectionManager().getCfg().getLockWatchdogTimeout(),
+        TimeUnit.MILLISECONDS, threadId, RedisCommands.EVAL_NULL_BOOLEAN);
+        
+    //如果还持有这个锁，则开启定时任务不断刷新该锁的过期时间
+    ttlRemainingFuture.addListener(new FutureListener<Long>() {
+        @Override
+        public void operationComplete(Future<Long> future) throws Exception {
+            if (!future.isSuccess()) {
+                return;
+            }
+
+            Long ttlRemaining = future.getNow();
+            // lock acquired
+            if (ttlRemaining == null) {
+                scheduleExpirationRenewal(threadId);
+            }
+        }
+    });
+    return ttlRemainingFuture;
+}
+```
+
+#### tryLockInnerAsync
+
+`tryLockInnerAsync`方法是真正执行获取锁的逻辑，它是一段LUA脚本代码。在这里，它使用的是hash数据结构。
+
+```java
+<T> RFuture<T> tryLockInnerAsync(long leaseTime, TimeUnit unit,     
+                            long threadId, RedisStrictCommand<T> command) {
+
+        //过期时间
+        internalLockLeaseTime = unit.toMillis(leaseTime);
+
+        return commandExecutor.evalWriteAsync(getName(), LongCodec.INSTANCE, command,
+                  //如果锁不存在，则通过hset设置它的值，并设置过期时间
+                  "if (redis.call('exists', KEYS[1]) == 0) then " +
+                      "redis.call('hset', KEYS[1], ARGV[2], 1); " +
+                      "redis.call('pexpire', KEYS[1], ARGV[1]); " +
+                      "return nil; " +
+                  "end; " +
+                  //如果锁已存在，并且锁的是当前线程，则通过hincrby给数值递增1
+                  "if (redis.call('hexists', KEYS[1], ARGV[2]) == 1) then " +
+                      "redis.call('hincrby', KEYS[1], ARGV[2], 1); " +
+                      "redis.call('pexpire', KEYS[1], ARGV[1]); " +
+                      "return nil; " +
+                  "end; " +
+                  //如果锁已存在，但并非本线程，则返回过期时间ttl
+                  "return redis.call('pttl', KEYS[1]);",
+        Collections.<Object>singletonList(getName()), 
+                internalLockLeaseTime, getLockName(threadId));
+    }
+```
+
+1. 通过exists判断，如果锁不存在，则设置值和过期时间，加锁成功
+2. 通过hexists判断，如果锁已存在，并且锁的是当前线程，则证明是重入锁，加锁成功
+3. 如果锁已存在，但锁的不是当前线程，则证明有其他线程持有锁。返回当前锁的过期时间，加锁失败
+
+![image-20220303200215032](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/picgo2022image-20220303200215032.png)
+
+
+
+加锁成功后，在redis的内存数据中，就有一条hash结构的数据。Key为锁的名称；field为随机字符串+线程ID；值为1。如果同一线程多次调用`lock`方法，值递增1。
+
+#### unlock
+
+```java
+public void unlock() {
+        try {
+            get(unlockAsync(Thread.currentThread().getId()));
+        } catch (RedisException e) {
+            if (e.getCause() instanceof IllegalMonitorStateException) {
+                throw (IllegalMonitorStateException)e.getCause();
+            } else {
+                throw e;
+            }
+        }
+    }
+
+public RFuture<Void> unlockAsync(final long threadId) {
+    final RPromise<Void> result = new RedissonPromise<Void>();
+    
+    //解锁方法
+    RFuture<Boolean> future = unlockInnerAsync(threadId);
+
+    future.addListener(new FutureListener<Boolean>() {
+        @Override
+        public void operationComplete(Future<Boolean> future) throws Exception {
+            if (!future.isSuccess()) {
+                cancelExpirationRenewal(threadId);
+                result.tryFailure(future.cause());
+                return;
+            }
+            //获取返回值
+            Boolean opStatus = future.getNow();
+            //如果返回空，则证明解锁的线程和当前锁不是同一个线程，抛出异常
+            if (opStatus == null) {
+                IllegalMonitorStateException cause = 
+                    new IllegalMonitorStateException("
+                        attempt to unlock lock, not locked by current thread by node id: "
+                        + id + " thread-id: " + threadId);
+                result.tryFailure(cause);
+                return;
+            }
+            //解锁成功，取消刷新过期时间的那个定时任务
+            if (opStatus) {
+                cancelExpirationRenewal(null);
+            }
+            result.trySuccess(null);
+        }
+    });
+
+    return result;
+}
+```
+
+#### unlockInnerAsync
+
+```java
+protected RFuture<Boolean> unlockInnerAsync(long threadId) {
+    return commandExecutor.evalWriteAsync(getName(), LongCodec.INSTANCE, EVAL,
+    
+            //如果锁已经不存在， 发布锁释放的消息
+            "if (redis.call('exists', KEYS[1]) == 0) then " +
+                "redis.call('publish', KEYS[2], ARGV[1]); " +
+                "return 1; " +
+            "end;" +
+            //如果释放锁的线程和已存在锁的线程不是同一个线程，返回null
+            "if (redis.call('hexists', KEYS[1], ARGV[3]) == 0) then " +
+                "return nil;" +
+            "end; " +
+            //通过hincrby递减1的方式，释放一次锁
+            //若剩余次数大于0 ，则刷新过期时间
+            "local counter = redis.call('hincrby', KEYS[1], ARGV[3], -1); " +
+            "if (counter > 0) then " +
+                "redis.call('pexpire', KEYS[1], ARGV[2]); " +
+                "return 0; " +
+            //否则证明锁已经释放，删除key并发布锁释放的消息
+            "else " +
+                "redis.call('del', KEYS[1]); " +
+                "redis.call('publish', KEYS[2], ARGV[1]); " +
+                "return 1; "+
+            "end; " +
+            "return nil;",
+    Arrays.<Object>asList(getName(), getChannelName()), 
+        LockPubSub.unlockMessage, internalLockLeaseTime, getLockName(threadId));
+
+}
+```
+
+1. 如果锁已经不存在，通过publish发布锁释放的消息，解锁成功
+2. 如果解锁的线程和当前锁的线程不是同一个，解锁失败，抛出异常
+3. 通过hincrby递减1，先释放一次锁。若剩余次数还大于0，则证明当前锁是重入锁，刷新过期时间；若剩余次数小于0，删除key并发布锁释放的消息，解锁成功
+
+![image-20220303201757853](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/picgo2022image-20220303201757853.png)
+
+可以看到 Redisson 对于加锁解锁实现了 可重入，和开启定时器延期锁。
+
+> 参考
+>
+> [分布式锁之Redis实现](https://www.jianshu.com/p/47fd7f86c848)  
+>
+> [Redis 分布式锁的正确实现](https://www.jianshu.com/p/73996715a38b)
+>
+> [Redis 分布式锁](https://www.jianshu.com/p/47fd7f86c848)
+>
+> [Redis 分布式锁过期了，但业务还没有执行完，怎么办](https://zhuanlan.zhihu.com/p/421843030)
+
+### 19. 扩展
 
 [redis6.0](https://mp.weixin.qq.com/s/_MWT5W8OjhdIrX6DS9rQcA)
 

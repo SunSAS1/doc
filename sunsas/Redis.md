@@ -727,7 +727,7 @@ Redis-Cluster采用无中心结构，每个节点保存数据和整个集群状�
 
 参考[全面剖析Redis Cluster原理和应用](https://www.cnblogs.com/xiaomaohai/p/6157597.html)
 
-### 17 Redis分布式锁
+### 17.Redis分布式锁
 
 首先说结论，单体Redis加锁，解锁：
 
@@ -853,7 +853,7 @@ String.valueOf(expireAfter));
 
 Redisson 提供了 watch dog 自动延时机制，提供了一个监控锁的看门狗，它的作用是在Redisson实例被关闭前，不断的延长锁的有效期。也就是说，如果一个拿到锁的线程一直没有完成逻辑，那么看门狗会帮助线程不断的延长锁超时时间，锁不会因为超时而被释放。默认情况下，看门狗的续期时间是30s，也可以通过修改Config.lockWatchdogTimeout来另行指定。
 
-### 18 Redisson
+### 18.Redisson
 
 > [Redisson](https://redisson.org/)是架设在[Redis](http://redis.cn/)基础上的一个Java驻内存数据网格（In-Memory Data Grid）。充分的利用了Redis键值数据库提供的一系列优势，基于Java实用工具包中常用接口，为使用者提供了一系列具有分布式特性的常用工具类。使得原本作为协调单机多线程并发程序的工具包获得了协调分布式多机多线程并发系统的能力，大大降低了设计和研发大规模分布式系统的难度。同时结合各富特色的分布式服务，更进一步简化了分布式环境中程序相互之间的协作。
 

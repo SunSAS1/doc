@@ -480,6 +480,137 @@ Redis 通过 MULTI、EXEC、WATCH 等命令来实现事务(transaction)功能。
 总是具有原⼦性（Atomicity）、⼀致性（Consistency）和隔离性（Isolation），并且当 Redis 运⾏
 在某种特定的持久化模式下时，事务也具有持久性（Durability）。
 > redis同⼀个事务中如果有⼀条命令执⾏失败，其后的命令仍然会被执⾏，没有回滚。
+>
+
+Redis事务相关命令：**
+
+- watch key1 key2 ... : 监视一或多个key,如果在事务执行之前，被监视的key被其他命令改动，则事务被打断 （ 类似**乐观锁** ）
+- multi : 标记一个事务块的开始（ queued ）
+- exec : 执行所有事务块的命令 （ 一旦执行exec后，之前加的监控锁都会被取消掉 ）　
+- discard : 取消事务，放弃事务块中的所有命令
+- unwatch : 取消watch对所有key的监控
+
+**Redis事务没有隔离级别的概念  所有的命令在事务中，并没有直接被执行！只有发起执行命令的时候才会执行 exec**
+
+**Redis中，单条命令是原子性执行的，但事务不保证原子性，且没有回滚。事务中任意命令执行失败，其余的命令仍会被执行。**
+
+最普通的事务命令如下：
+
+![img](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/picgo20221659331-20190416204151947-1999193750.png)
+
+Redis 本身没有锁的概念，而且Redis内部是单线程，不会有并发的问题，但是存在多个客户端并发修改 Redis 数据的场景。
+
+可以通过 Redis 分布式锁去限制只有一个客户端可以修改数据，这是一种**悲观锁**的思想，也可以使用 Redis  的 watch 实现**乐观锁**的功能。具体就是在事务执行时添加 watch key，如果监听的值有变动，事务被打断，直接失败。
+
+![img](https://sunsasdoc.oss-cn-hangzhou.aliyuncs.com/picgo20221659331-20190416211144923-1469436233.png)
+
+这是类似CAS的思路，使用这个你可以方便的在Redis层做一些并发的控制。比如秒杀系统时，为限制同一账号的多次秒杀请求，先用 redis watch 限制同时仅有一个请求：
+
+```java
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import redis.clients.jedis.Jedis;
+
+/**
+ * redis测试抢购
+ * 
+ * @author 10255_000
+ * 
+ */
+public class RedisTest {
+    public static void main(String[] args) {
+        final String watchkeys = "watchkeys";
+        ExecutorService executor = Executors.newFixedThreadPool(20);
+
+        final Jedis jedis = new Jedis("192.168.3.202", 6379);
+        jedis.set(watchkeys, "0");// 重置watchkeys为0
+        jedis.del("setsucc", "setfail");// 清空抢成功的，与没有成功的
+        jedis.close();
+
+        for (int i = 0; i < 10000; i++) {// 测试一万人同时访问
+            executor.execute(new MyRunnable());
+        }
+        executor.shutdown();
+    }
+}
+
+
+import java.util.List;
+import java.util.UUID;
+
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.Transaction;
+
+public class MyRunnable implements Runnable {
+	User user = new User("sunsas")
+    
+    Jedis jedis = new Jedis("192.168.3.202", 6379);
+
+    public MyRunnable() {
+    }
+
+    @Override
+    public void run() {
+        try {
+            jedis.watch(user.getAccount());// watchkeys
+
+            String val = jedis.get(watchkeys);
+            int valint = Integer.valueOf(val);
+            if (valint < 10) {
+                
+                Transaction tx = jedis.multi();// 开启事务
+                tx.incr("watchkeys");
+                List<Object> list = tx.exec();// 提交事务，如果此时watchkeys被改动了，则返回null
+                
+                if (list != null) {
+                    /* 提交成功业务逻辑 */
+                } else {
+                    /* 提交失败业务逻辑 */
+                }
+            } else {
+                System.out.println("请求失败");
+                return;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            jedis.close();
+        }
+    }
+}
+```
+
+其实这个就可以直接用作控制抢购业务，watch的key，value 值就是抢购物品的数量：
+
+```java
+jedis.watch(key);
+data = jedis.get(key);
+currentNum = Integer.parseInt(data);
+if (currentNum > 0) {
+    //开启事务
+    Transaction transaction = jedis.multi();
+    //设置新值,如果key的值被其它连接的客户端修改，那么当前连接的exec命令将执行失败
+    currentNum--;
+    transaction.set(key, String.valueOf(currentNum));
+    List res = transaction.exec();
+    if (res.size() == 0) {
+        System.out.println(customerName + " 抢购失败");
+        success = false;
+    } else {
+        success = true;
+        System.out.println(customerName + " 抢购成功,[" + key + "]剩余：" + currentNum);
+    }
+} else {
+    System.out.println("商品售空,活动结束!");
+    System.exit(0);
+}
+```
+
+> [秒杀系统架构分析与实战](https://my.oschina.net/xianggao/blog/524943)
+>
+> [redis使用watch秒杀抢购思路](https://blog.csdn.net/qq1013598664/article/details/70183908)
+
 
 ### 11. 缓存雪崩
 缓存同一时间大面积的失效，所以，后面的请求都会落到数据库上，造成数据库短时间内承受大量请求而崩掉。

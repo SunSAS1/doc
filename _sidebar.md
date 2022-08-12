@@ -5,6 +5,8 @@
   * [1.1 Java集合](sunsas/Java集合)
   * [1.2 Java多线程](sunsas/Java多线程)
   * [1.3 JVM](sunsas/JVM)
+  * 杂谈
+    * [1 CompletableFuture](sunsas/other/CompletableFuture.md)
 
 * 计算机基础
 
@@ -18,6 +20,7 @@
   * [3.2 MySQL高级](sunsas/MySQL高级)
   * [3.3 Redis](sunsas/Redis)
   * [3.4 MySQL笔记](sunsas/MySQL笔记)
+  * [3.5 MySQL极客](sunsas/MySQL极客)
 
 * 高级
   * [4.1 Netty](sunsas/highLevel/Netty)

@@ -1496,6 +1496,7 @@ public class ExchangerTest {
 ```
 
 ### 5. CompletableFuture
+可参考详细[文档](https://sunsas.gitee.io/doc/#/sunsas/other/CompletableFuture?id=completablefuture)
 JDK5 新增了 Future 接口，用于描述一个异步计算的结果。虽然 Future 以及相关使用方法提供了异步执行任务的能力，但是对于结果的获取却是很不方便，只能通过阻塞或者轮询的方式得到任务的结果。阻塞的方式显然和我们的异步编程的初衷相违背，轮询的方式又会耗费无谓的 CPU 资源，而且也不能及时地得到计算结果.
 
 **Future接口可以构建异步应用，但依然有其局限性**。它很难直接表述多个Future 结果之间的依赖性。

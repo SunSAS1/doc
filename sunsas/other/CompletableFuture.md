@@ -549,7 +549,7 @@ public static CompletableFuture<Object> anyOf(CompletableFuture<?>... cfs) {
 这两个都是静态方法，接收参数是可变长的 CompletableFuture，区别是
 
 1. allOf 含义是所有 CompletableFuture 结束时才返回。而 anyOf 含义是任一 CompletableFuture 结束时就返回。
-2. allOf 返回值是 CompletableFuture<Void>，需要 thenApply，在回调函数中去 get() 。anyOf 返回值类型都可能不同，任意一个， 意味着无法判断是什么类型，所以 anyOf 的返回值是 CompletableFuture<Object>类型
+2. allOf 返回值是 CompletableFuture\<Void\>，需要 thenApply，在回调函数中去 get() 。anyOf 返回值类型都可能不同，任意一个， 意味着无法判断是什么类型，所以 anyOf 的返回值是 CompletableFuture\<Object\>类型
 3. allOf 相当于聚合所有的 CompletableFuture，而 anyOf 只返回最快执行的结果，其余的返回结果就被丢弃了。
 
 ##### allOf示例
